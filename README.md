@@ -1,9 +1,9 @@
 # Failure Mode Analysis: Logic Drifting in Multi-Agent AIOps Workflows
 
 ## 📌 Overview
-This project evaluates an automated Root Cause Analysis (RCA) pipeline built on **AWS Bedrock Agents**. By conducting cross-temporal log analysis (comparing sessions from 2025-12-20 and 2025-12-22), I identified a critical **architectural flaw** where the orchestration logic drifts due to "misleading recommendations" from upstream agents.
+This project evaluates an automated Root Cause Analysis (RCA) pipeline built on **AWS Bedrock Agents**. By conducting cross-temporal log analysis (comparing sessions from 2025-12-20 and 2025-12-22), I identified an **architectural flaw** where the orchestration logic drifts due to "misleading recommendations" from upstream agents.
 
-This repository documents how a perfectly functioning LLM can still yield incorrect results due to poor **Parameter Routing** strategies in a multi-agent ecosystem.
+This repository documents how a perfectly functioning LLM can still yield incorrect results due to weak **Parameter Routing** strategies in a multi-agent ecosystem.
 
 ---
 
