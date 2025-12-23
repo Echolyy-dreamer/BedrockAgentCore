@@ -1,46 +1,48 @@
-# Failure Mode Analysis: Logic Drifting in Multi-Agent AIOps Workflows
+# Analysis: Common Challenges in Multi-Agent Orchestration (AIOps Case Study)
 
 ## 📌 Overview
-This project evaluates an automated Root Cause Analysis (RCA) pipeline built on **AWS Bedrock Agents**. Operating in a "Black Box" environment (containerized agents), I utilized **Reverse Inference** based on execution logs to identify a critical architectural flaw.
+This repository provides a deep-dive analysis into the **fragility of reasoning chains** in autonomous AI agents. Based on an AIOps Root Cause Analysis (RCA) experiment on AWS, I utilized **Reverse Inference** to audit execution logs from a "black-box" containerized environment. 
 
-This repository documents how identical fault signals can lead to inconsistent outcomes due to **Contextual Bias** in the orchestration layer.
+The goal of this project is to move beyond "running a demo" and instead identify the **systemic failure modes** currently hindering the industrial adoption of Multi-Agent Systems (MAS).
 
 ---
 
 ## 🔍 Investigation: Black-Box Reverse Inference
-Since the internal logic of the containerized agents is inaccessible, I performed a **Differential Analysis** between successful and failed diagnostic sessions.
+Operating in a restricted environment where the internal code of containerized agents was inaccessible, I performed a **Differential Analysis** between successful (2025-12-22) and failed (2025-12-20) sessions. My findings highlight three critical bottlenecks in current agent architectures:
 
+### 1. Evidence Contamination & Attention Bias
+* **The Issue**: Textual density in upstream findings creates a "Contextual Bias" that misleads the Orchestrator.
+* **Observation**: In the failure case, the findings from `Task-2 (TraceAgent)` were heavily weighted towards "API Gateway Integration" and "Timeouts." 
+* **The Logic Drift**: The Brain Agent (Orchestrator) exhibited a **textual bias**, prioritizing the high-frequency keywords in Task-2's summary over the explicit "DynamoDB Throttling" error logs in Task-1. This led to the extraction of the wrong `resource_id`.
 
+### 2. Execution Layer "Over-Obedience"
+* **The Issue**: Downstream agents are often designed as deterministic executors, lacking the autonomy to cross-check or "challenge" upstream instructions.
+* **Observation**: Once the Orchestrator routed the wrong Resource ID to `Task-3 (ChangeDetection)`, the agent was effectively "blinded." It strictly followed the erroneous instruction to audit the API Gateway, missing the actual configuration changes in the Lambda function.
 
-### The Observed "Logic Drift"
-By auditing the `task_description` and parameter extraction patterns, the following failure chain was inferred:
-
-1.  **Contextual Contamination**: 
-    In the failed session (2025-12-20), the findings from `Task-2 (TraceGraphAgent)` were heavily weighted towards "API Gateway Integration" and "Timeouts." 
-2.  **Orchestrator Drift**: 
-    The Brain Agent (Orchestrator) exhibited a **textual bias**. It prioritized the high-frequency keywords in Task-2's Summary over the explicit error logs in Task-1, leading it to extract the wrong `resource_id`.
-3.  **Strict Parameter Dependency**: 
-    `Task-3 (ChangeDetection)` acted as a deterministic executor. Once the Orchestrator routed the wrong Resource ID, Task-3 was effectively "blinded" to the actual root cause, as its search scope was locked by the upstream drift.
+### 3. The "Shallow Verification" Trap (Logic Closure Gap)
+* **The Issue**: Agents often stop at "Event Detection" without performing "Impact Validation."
+* **Observation**: In the session where Task-3 correctly identified an `UpdateFunctionConfiguration` event, the CloudTrail log showed an empty `environment` parameter in the `requestParameters` (see logs). 
+* **The Failure**: The agent reported the event but failed to achieve **Logic Closure**. It did not trigger a follow-up query (e.g., `GetFunction`) to verify *what* specific configuration was changed, leaving the evidence chain incomplete.
 
 ---
 
-## 📊 Comparative Case Study
+## 📊 Comparative Evidence (Log-Driven)
 
 | Metric | Case A: Observed Success | Case B: Observed Failure |
 | :--- | :--- | :--- |
 | **Session Date** | 2025-12-22 | 2025-12-20 |
-| **Upstream Findings** | Lambda Errors + APIGW 5XX | Lambda Errors + APIGW 5XX |
-| **Inferred Brain Decision** | Prioritized Log Evidence | Prioritized Trace Summary Bias |
-| **Outcome** | **Success** (Root Cause Identified) | **Failure** (Search Scope Mismatch) |
+| **Primary Signal** | Lambda Errors + APIGW 5XX | Lambda Errors + APIGW 5XX |
+| **Orchestration Decision** | Routed to **Lambda Function** | Routed to **API Gateway** |
+| **Inferred Cause** | Balanced Attention to Logs | Over-weighting of Trace Theory |
+| **Outcome** | **Success** (Root Cause Found) | **Failure** (Logic Drift) |
 
 ---
 
-## 💡 Engineering Reflections & Best Practices
-1.  **The Peril of Opaque Orchestration**: 
-    In multi-agent systems, the "Brain" often lacks a formal conflict-resolution protocol. Without explicit priority rules (e.g., `Logs > Traces`), the system's accuracy becomes stochastic based on the LLM's attention mechanism.
-    
-2.  **Decoupling Observation from Inference**: 
-    To prevent logic drift, intermediate agents should ideally report raw observations. When agents provide interpretative summaries (like Task-2's timeout theory), they risk "hijacking" the orchestrator's planning phase.
+## 💡 Engineering Reflections: Building Robust Agent Systems
+To solve these common pitfalls, I propose three architectural guardrails for production-grade Agent systems:
 
-3.  **Reverse Engineering as a Debugging Tool**: 
-    In modern AI-native stacks where source code is often hidden behind APIs or containers, **log-based reverse inference** is the most effective way to audit system reliability.
+1.  **Fact/Inference Decoupling**: Intermediate agents should be restricted to reporting raw observations. Interpretive summaries (the "Why") should be isolated from the "What" to prevent hijacking the Orchestrator's planning phase.
+2.  **Conflict-Aware Arbitration**: Implement a "Cross-Validation" layer in the Orchestrator. If Logs (Facts) conflict with Service Graphs (Inference), the system must have a prioritized arbitration protocol (e.g., `Log-Evidence > Metric-Theory`).
+3.  **The "Trigger-Audit" Pattern**: Detection of a change event should be treated as a trigger, not a conclusion. Agents must be programmed to fetch "State Differences" (Diffs) to confirm the actual impact of a change, ensuring a closed-loop evidence chain.
+
+---
