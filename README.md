@@ -7,6 +7,12 @@ The goal of this project is to move beyond "running a demo" and instead identify
 
 ---
 
+## 🌍 Background: Scenario Context
+
+The experiment simulates a **DynamoDB throttling fault** in a Lambda function to evaluate an AIOps-driven **Root Cause Analysis (RCA)** pipeline built with AWS **Bedrock AgentCore**.
+
+---
+
 ## 🔍 Investigation: Black-Box Reverse Inference
 Operating in a restricted environment where the internal code of containerized agents was inaccessible, I performed a **Differential Analysis** between successful (2025-12-22) and failed (2025-12-20) sessions. My findings highlight three critical bottlenecks in current agent architectures:
 
