@@ -8,27 +8,30 @@ The goal of this project is to move beyond "running a demo" and instead identify
 ---
 
 ## 🌍 Background: Scenario Context
+The experiment simulates a **DynamoDB throttling fault** within a Lambda function to evaluate an AIOps-driven **Root Cause Analysis (RCA)** pipeline built with AWS **Bedrock AgentCore**. 
 
-The experiment simulates a **DynamoDB throttling fault** in a Lambda function to evaluate an AIOps-driven **Root Cause Analysis (RCA)** pipeline built with AWS **Bedrock AgentCore**.
+**The Challenge:** Traditional dashboards show API Gateway 5XX errors, but Lambda metrics might appear "Green" from a high-level view. The Agentic workflow is expected to correlate Logs, Traces, and CloudTrail events. However, I observed that identical input scenarios occasionally lead to inconsistent results, highlighting critical "Logic Drift" in the reasoning chain.
 
 ---
 
 ## 🔍 Investigation: Black-Box Reverse Inference
-Operating in a restricted environment where the internal code of containerized agents was inaccessible, I performed a **Differential Analysis** between successful (2025-12-22) and failed (2025-12-20) sessions. My findings highlight three critical bottlenecks in current agent architectures:
+Operating in a restricted environment where the internal code of containerized agents was inaccessible, I performed a **Differential Analysis** between successful (2025-12-22) and failed (2025-12-20) sessions.
 
 ### 1. Evidence Contamination & Attention Bias
 * **The Issue**: Textual density in upstream findings creates a "Contextual Bias" that misleads the Orchestrator.
-* **Observation**: In the failure case, the findings from `Task-2 (TraceAgent)` were heavily weighted towards "API Gateway Integration" and "Timeouts." 
-* **The Logic Drift**: The Brain Agent (Orchestrator) exhibited a **textual bias**, prioritizing the high-frequency keywords in Task-2's summary over the explicit "DynamoDB Throttling" error logs in Task-1. This led to the extraction of the wrong `resource_id`.
+* **The Logic Drift**: In the failure case, `Task-2 (TraceAgent)` emphasized "API Gateway Integration" and "Timeouts." The Orchestrator exhibited a **textual bias**, prioritizing these high-frequency keywords over the explicit "DynamoDB Throttling" error logs in Task-1. This led to the extraction of the wrong `resource_id`.
 
 ### 2. Execution Layer "Over-Obedience"
-* **The Issue**: Downstream agents are often designed as deterministic executors, lacking the autonomy to cross-check or "challenge" upstream instructions.
-* **Observation**: Once the Orchestrator routed the wrong Resource ID to `Task-3 (ChangeDetection)`, the agent was effectively "blinded." It strictly followed the erroneous instruction to audit the API Gateway, missing the actual configuration changes in the Lambda function.
+* **The Issue**: Downstream agents act as deterministic executors, lacking the autonomy to "challenge" upstream instructions.
+* **Observation**: Once the Orchestrator routed the wrong Resource ID to `Task-3 (ChangeDetection)`, the agent was effectively "blinded." It strictly followed the instruction to audit the API Gateway, missing the actual configuration changes in the Lambda function.
 
 ### 3. The "Shallow Verification" Trap (Logic Closure Gap)
 * **The Issue**: Agents often stop at "Event Detection" without performing "Impact Validation."
-* **Observation**: In the session where Task-3 correctly identified an `UpdateFunctionConfiguration` event, the CloudTrail log showed an empty `environment` parameter in the `requestParameters` (see logs). 
-* **The Failure**: The agent reported the event but failed to achieve **Logic Closure**. It did not trigger a follow-up query (e.g., `GetFunction`) to verify *what* specific configuration was changed, leaving the evidence chain incomplete.
+* **Observation**: Task-3 identified an `UpdateFunctionConfiguration` event, but the CloudTrail log showed an empty `environment` parameter. The agent reported the event without fetching the **"State Diff"** (e.g., via `GetFunction`), leaving the evidence chain incomplete and failing to confirm causality.
+
+### 4. The "Dead-End" Effect: Why Prompting Isn't Enough
+* **The Fatal Flaw**: A critical break in sequential agent design. In the failed session, even though the **Final RCA Prompt** was instructed to **"Prioritize Logs over Traces,"** it was forced to fail. 
+* **The Insight**: Because the upstream chain had already "starved" the context of correct evidence (by misdirecting Task-3), the final decision-maker had no facts to work with. **Workflow Engineering is superior to Prompt Engineering**—you cannot reason your way out of a broken evidence chain.
 
 ---
 
@@ -36,19 +39,19 @@ Operating in a restricted environment where the internal code of containerized a
 
 | Metric | Case A: Observed Success | Case B: Observed Failure |
 | :--- | :--- | :--- |
-| **Session Date** | 2025-12-22 | 2025-12-20 |
-| **Primary Signal** | Lambda Errors + APIGW 5XX | Lambda Errors + APIGW 5XX |
 | **Orchestration Decision** | Routed to **Lambda Function** | Routed to **API Gateway** |
-| **Inferred Cause** | Balanced Attention to Logs | Over-weighting of Trace Theory |
-| **Outcome** | **Success** (Root Cause Found) | **Failure** (Logic Drift) |
+| **Evidence Quality** | Full Evidence Chain (Logs + Change) | **Evidence Starvation** (No Change found) |
+| **RCA Reasoning** | Log-Priority Logic Executed | **Logic Defeated by Chain Break** |
+| **Final Outcome** | **Root Cause Identified** | **Diagnostic Dead-End** |
 
 ---
 
 ## 💡 Engineering Reflections: Building Robust Agent Systems
-To solve these common pitfalls, I propose three architectural guardrails for production-grade Agent systems:
-
-1.  **Fact/Inference Decoupling**: Intermediate agents should be restricted to reporting raw observations. Interpretive summaries (the "Why") should be isolated from the "What" to prevent hijacking the Orchestrator's planning phase.
-2.  **Conflict-Aware Arbitration**: Implement a "Cross-Validation" layer in the Orchestrator. If Logs (Facts) conflict with Service Graphs (Inference), the system must have a prioritized arbitration protocol (e.g., `Log-Evidence > Metric-Theory`).
-3.  **The "Trigger-Audit" Pattern**: Detection of a change event should be treated as a trigger, not a conclusion. Agents must be programmed to fetch "State Differences" (Diffs) to confirm the actual impact of a change, ensuring a closed-loop evidence chain.
+1. **Fact/Inference Decoupling**: Restrict intermediate agents to reporting raw observations. Prevent "Inference Leakage" from hijacking the planning phase.
+2. **Conflict-Aware Arbitration**: Implement a "Cross-Validation" layer. If Logs (Facts) conflict with Service Graphs (Inference), the system must have a prioritized arbitration protocol.
+3. **The "Trigger-Audit" Pattern**: Detection of a change event should be a trigger, not a conclusion. Agents must fetch "State Differences" to achieve true Logic Closure.
 
 ---
+
+## 🏁 Conclusion
+42 is the "Answer to the Ultimate Question of Life, the Universe, and Everything." In the world of AI Agents, the answer lies not in a single prompt, but in the **rigorous orchestration of data and the audacity to cross-verify every signal.** This analysis stands as a testament to the importance of **Observability and Deep Auditing** in the era of autonomous systems.
