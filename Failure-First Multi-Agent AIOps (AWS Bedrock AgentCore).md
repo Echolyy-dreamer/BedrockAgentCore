@@ -19,25 +19,6 @@ The goal is not to simply replicate a demo, but to use **black-box Reverse Infer
 - Demonstration of production-ready engineering and safety considerations  
 
 
-
----
-
-## Workflow Overview
-
-```mermaid
-flowchart TD
-    A[Event: DynamoDB Throttling] --> B[Orchestrator]
-    B --> C1[TraceAgent: Observes API Gateway]
-    B --> C2[LogAgent: Observes Lambda Function]
-    C1 --> D[ChangeDetectionAgent]
-    C2 --> D
-    D --> E[Critic Agent: Conflict Arbitration]
-    E --> F[Final RCA Output]
-
-    classDef orchestrator fill:#f9f,stroke:#333,stroke-width:1px;
-    class B orchestrator;
-    class C1,C2,D,E,F fill:#bbf,stroke:#333,stroke-width:1px;
-
 ---
 
 ## 🌍 Background: Scenario Context
