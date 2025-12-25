@@ -47,6 +47,38 @@
 
 ## 💡 架构演进建议：构建“带护栏”的生产级 MAS
 
+graph TD
+    %% 定义样式
+    classDef highlight fill:#f96,stroke:#333,stroke-width:2px;
+    classDef aws fill:#232F3E,color:#fff;
+    classDef observation fill:#e1f5fe,stroke:#01579b;
+
+    subgraph Workshop_Existing_Logic [Workshop 现有模式: 静态线性编排]
+        A[Brain Agent 一次性生成 Task List] --> B[Task 1: 审计网关日志]
+        B --> C[Task 2: 审计指定资源变更]
+        C --> D[生成 RCA 结论]
+        style A fill:#fff3e0,stroke:#ff9800
+    end
+
+    subgraph Production_Evolution_Logic [生产级演进模式: 动态重规划]
+        E[Brain Agent 初始化目标] --> F[Task 执行: 获取 Observation]
+        F --> G{置信度/证据评估}
+        
+        %% 分支逻辑
+        G -- 证据不足/路径偏差 --> H((重规划))
+        G -- 发现关键证据 --> I[状态差分验证 State Diff]
+        
+        H -->|注入拓扑约束| E
+        I --> J[输出确定性 RCA]
+
+        style H class highlight
+        style G class observation
+    end
+
+    %% 连接两个 subgraph 的注释
+    note1[无法纠偏初始错误] -.-> Workshop_Existing_Logic
+    note2[实现逻辑自愈] -.-> Production_Evolution_Logic
+
 针对上述发现，我提出以下面向工业落地的架构改进方案：
 
 ### 1. 从“概率规划”转向“拓扑注入”
