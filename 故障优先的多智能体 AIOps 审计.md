@@ -48,16 +48,13 @@
 ## 💡 架构演进建议：构建“带护栏”的生产级 MAS
 
 graph TD
-    %% 定义样式
-    classDef highlight fill:#f96,stroke:#333,stroke-width:2px;
-    classDef aws fill:#232F3E,color:#fff;
-    classDef observation fill:#e1f5fe,stroke:#01579b;
-
     subgraph Workshop_Existing_Logic [Workshop 现有模式: 静态线性编排]
         A[Brain Agent 一次性生成 Task List] --> B[Task 1: 审计网关日志]
         B --> C[Task 2: 审计指定资源变更]
         C --> D[生成 RCA 结论]
+        
         style A fill:#fff3e0,stroke:#ff9800
+        style D fill:#f9f9f9,stroke:#ddd
     end
 
     subgraph Production_Evolution_Logic [生产级演进模式: 动态重规划]
@@ -71,13 +68,14 @@ graph TD
         H -->|注入拓扑约束| E
         I --> J[输出确定性 RCA]
 
-        style H class highlight
-        style G class observation
+        style H fill:#f96,stroke:#333,stroke-width:2px
+        style G fill:#e1f5fe,stroke:#01579b
+        style J fill:#c8e6c9,stroke:#2e7d32
     end
 
-    %% 连接两个 subgraph 的注释
-    note1[无法纠偏初始错误] -.-> Workshop_Existing_Logic
-    note2[实现逻辑自愈] -.-> Production_Evolution_Logic
+    %% 连接注释
+    note1>无法纠偏初始错误] --- Workshop_Existing_Logic
+    note2>实现逻辑自愈] --- Production_Evolution_Logic
 
 针对上述发现，我提出以下面向工业落地的架构改进方案：
 
