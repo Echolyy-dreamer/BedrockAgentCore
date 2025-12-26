@@ -69,8 +69,10 @@ Topology evolution breaks implicit assumptions, causing reasoning chains to fail
 **Observation**  
 Before any expert agent executed, the Brain Agent finalized **static resource bindings**.
 
-- Successful path: Change detection targeted the Lambda function  
-- Drifted path: Change detection locked onto API Gateway  
+- Successful path: Change detection targeted the Lambda function
+  - Query CloudTrail for changes to `aiops-demo-put-item` in last 24 hours
+- Drifted path: Change detection locked onto API Gateway
+  - Query CloudTrail for changes to `aiops-demo-sample-api` in last 24 hours 
 
 **Insight**  
 Once an incorrect resource was selected, downstream agents became blind by design.
