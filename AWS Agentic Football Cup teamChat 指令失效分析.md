@@ -6,6 +6,12 @@ AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Str
 
 赛事提供 Player Portal 临场指挥能力，允许开发者通过自然语言输入实时战术指令（teamChat），动态调整 AI 球员的攻防行为。
 
+下图为赛事官方 Player Portal 教练指挥界面。
+教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
+该指令会随比赛状态一起传递至后端 `gameState.teamChat` 字段，供 Agent 服务处理。
+
+![AWS Agentic Football Cup Player Portal](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Player%20Portal.jpg)
+
 示例：
 
 ```text
@@ -19,7 +25,7 @@ Defend deep
 
 基于公开 sample-agent 实现版本，对 Balanced、Memory、Gateway 三套模板进行源码链路分析后发现：
 
-> 问题并非来自平台通信、模型能力或 Memory 服务，而是 gameState.teamChat 没有经过 Context Construction 层进入 Agent Context。
+> 当前 sample-agent 实现中未发现 teamChat 注入 Agent Context 的处理逻辑。
 
 ---
 
@@ -87,7 +93,10 @@ gameState
 # 2. 当前 summarize_state() 提取范围
 
 在当前 sample-agent 架构中，
-summarize_state() 实际承担 Raw GameState 到 Agent Context 的转换职责。当前summarize_state主要提取以下信息。
+summarize_state() 实际承担 Raw GameState 到 Agent 输入上下文（state_summary）的转换职责。因此 summarize_state() 是整个 Agent Context Pipeline 中的关键 Context Builder。
+任何未在此阶段转换的数据，都不会自然进入后续 LLM 推理流程。
+
+当前summarize_state主要提取以下信息。
 
 ## 比赛基础状态
 
@@ -200,7 +209,7 @@ Agent Context
 ```text
 gameState.teamChat
 
-        ↓
+        ↓ X
 
 Context Construction
 
@@ -258,9 +267,7 @@ LLM Reasoning
 Memory Persistence
 ```
 
-Memory 只能持久化：
-
-> 已经进入 Agent 交互流程的信息。
+Memory 主要作用是对已经进入 Agent 交互流程的信息进行存储和检索，它不会替代前置的 Context Construction。
 
 
 当前：
@@ -370,6 +377,7 @@ if coach_instruction:
 ```
 ![Context Injection Fix](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Adding.png)
 
+> 该方案保持原有 Agent 输入结构不变，仅扩展 Context Builder 输出内容。
 修复后数据流：
 
 ```text
@@ -514,6 +522,7 @@ Context Engineering
 
 ---
 **Many Agent failures are not caused by code execution errors, but by missing or incorrect context construction.**
+在 Agent 系统中，许多问题并非表现为代码执行错误，而是表现为上下文构建链路缺失、信息丢失或语义转换不足。
 
 # 9. 最终结论
 
@@ -527,7 +536,7 @@ Context Engineering
 | Bedrock 模型能力 | ✅ 正常 |
 | Strands Memory | ✅ 正常 |
 | MCP Gateway 能力 | ✅ 正常 |
-| teamChat Context Injection | ❌ Not Implemented |
+| teamChat Context Injection | ❌ Not Found in Current Implementation |
 
 
 ## 核心原因
@@ -539,7 +548,7 @@ Context Engineering
 ```text
 teamChat
 
-↓
+↓ X
 
 Agent Context
 ```
@@ -555,13 +564,13 @@ Agent Context
 
 ---
 
-# Author
+# 作者简介
 
-**Echolyy**
+**Echo Liu**
 
 Cloud & AI Agent Engineering Enthusiast.
 
-# Reference
+# 参考链接
 Official Agentic Football Cup Sample Workshop Repo:
 https://github.com/aws-samples/agentic-football-cup
 
