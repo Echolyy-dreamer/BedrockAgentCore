@@ -86,7 +86,8 @@ gameState
 
 # 2. 当前 summarize_state() 提取范围
 
-当前 Context Builder 主要提取以下信息。
+在当前 sample-agent 架构中，
+summarize_state() 实际承担 Raw GameState 到 Agent Context 的转换职责。当前summarize_state主要提取以下信息。
 
 ## 比赛基础状态
 
@@ -174,6 +175,11 @@ Coach Tactical Instruction
 ```
 
 ---
+![summarize_state Context Builder](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/summarize_state.png)
+
+该代码片段展示当前 Context Builder 的字段映射逻辑：
+ball、score、gameTime、playMode、players 均被提取，
+但未发现 teamChat 字段读取逻辑。
 
 # 3. teamChat 指令失效根因分析
 
@@ -252,9 +258,9 @@ LLM Reasoning
 Memory Persistence
 ```
 
-Memory 只能保存：
+Memory 只能持久化：
 
-> 已经进入 Agent Context 的信息。
+> 已经进入 Agent 交互流程的信息。
 
 
 当前：
@@ -324,7 +330,9 @@ Agent Context
 
 # 6. Context Injection 修复方案
 
-根据当前架构，最佳修改位置：
+虽然 agent_base.py 是调用入口，但 teamChat 属于 GameState 到 Context 的转换逻辑，因此更适合在 summarize_state() 层完成注入。
+
+根据当前架构，建议修改位置：
 
 ```text
 state.py
@@ -344,7 +352,7 @@ Raw Game State
 LLM Context
 ```
 
-的唯一转换层。
+的主要转换层。
 
 
 增加：
@@ -360,7 +368,7 @@ if coach_instruction:
     )
     lines.append(coach_instruction)
 ```
-
+![Context Injection Fix](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Adding.png)
 
 修复后数据流：
 
@@ -489,7 +497,7 @@ X
 Agent Context
 ```
 
-导致整个临场指挥链路失效。
+导致当前 sample-agent 实现中的临场指挥链路无法生效。
 
 
 未来 Agent Engineering 的核心能力，将逐渐从：
@@ -505,6 +513,7 @@ Context Engineering
 ```
 
 ---
+**Many Agent failures are not caused by code execution errors, but by missing or incorrect context construction.**
 
 # 9. 最终结论
 
@@ -518,7 +527,7 @@ Context Engineering
 | Bedrock 模型能力 | ✅ 正常 |
 | Strands Memory | ✅ 正常 |
 | MCP Gateway 能力 | ✅ 正常 |
-| teamChat Context Injection | ❌ 缺失 |
+| teamChat Context Injection | ❌ Not Implemented |
 
 
 ## 核心原因
@@ -544,16 +553,17 @@ Agent Context
 - AI 球员不会调整策略；
 - Player Portal 指挥能力无法影响最终决策。
 
+---
 
-说明：
+# Author
 
-本人当前无赛事环境操作权限，无法完成最终实战部署验证。
+**Echolyy**
 
-该分析基于：
+Cloud & AI Agent Engineering Enthusiast.
 
-- sample-agent 源码链路；
-- Agent Context 构造逻辑；
-- Strands Memory 工作机制。
+# Reference
+Official Agentic Football Cup Sample Workshop Repo:
+https://github.com/aws-samples/agentic-football-cup
 
 
 ---
