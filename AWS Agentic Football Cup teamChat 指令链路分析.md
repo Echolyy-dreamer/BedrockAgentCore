@@ -4,30 +4,36 @@
 
 AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Strands SDK 构建的智能体实战赛事。
 
-赛事提供 Player Portal 临场指挥能力，允许开发者通过自然语言输入实时战术指令（teamChat），动态调整 AI 球员的攻防行为。
+赛事提供 Player Portal 教练临场指挥能力，允许参赛者通过自然语言输入实时战术指令（teamChat），动态影响 AI 球员的攻防决策。
 
 下图为赛事官方 Player Portal 教练指挥界面。
 教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
-该指令会随比赛状态一起传递至后端 `gameState.teamChat` 字段，供 Agent 服务处理。
+该指令会随比赛状态一起传递至后端 `gameState.teamChat` 字段，由 Agent 服务接收。
 
 ![AWS Agentic Football Cup Player Portal](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Player%20Portal.jpg)
 
-示例：
+在现场观赛和调试过程中，我注意到许多参赛者都会在 Portal 中输入：
 
 ```text
-Defend deep
-Press high
-Play possession
-Attack left wing
+shoot
+
+defend
+
+press
 ```
+等实时战术指令。
 
-然而在实际调试过程中发现：
+这引发了一个关于 Multi-Agent 指令作用域的问题：
 
-> Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
+- 在多个独立 Player Agent 协同决策的架构中，一条 Coach Command 如何影响每个球员？
+- 它是通过中央控制器将指令路由给目标球员，还是通过全局广播让 Agent 根据自身 Context 自主调整行为？
 
-基于公开 sample-agent 实现版本，对 Balanced、Aggressive、Defensive、Memory、Gateway 等预置模板进行源码链路分析后发现：
+带着这个关于 Multi-Agent Tactical Scope（多智能体战术作用域） 的问题，我进一步分析了官方 sample-agent 中 Balanced、Aggressive、Defensive、Memory、Gateway 等模板的源码调用链。
 
-> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context。
+
+然而分析过程中发现：
+
+> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context，导致Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
 
 ---
 
@@ -482,7 +488,9 @@ POSITION_LABEL = "FWD1"
 
 但所有 Agent 接收到的是同一个：
 
+```text
 gameState.teamChat
+```
 
 因此当前机制天然更适合：
 
@@ -511,7 +519,7 @@ Attack left wing
 
 # 8. 单球员指令与实时延迟权衡
 
-如果希望支持教练采用点名式口语喊话，如真实比赛里场边直接呼喊：
+如果希望支持教练采用点名式口语喊话，如真实比赛里场边直接呼喊 「FWD1 抓住机会立刻射门」：
 
 ```text
 FWD1 shoot now
@@ -521,7 +529,7 @@ Player 3 move forward
 GK stay back
 ```
 
-则需要增加额外机制, 例如采用 Agent-side Command Filtering（Agent 自主指令过滤机制)，所有 Agent 接收同一个 Coach Command，由每个 Agent 根据自身 Context 判断是否与自己相关：
+则需要增加额外机制, 例如采用 Agent-side Command Filtering（Agent 自主指令过滤机制)，所有 Agent 接收同一个教练指令，由每个 Agent 根据自身 Context 判断是否与自己相关：
 
 ```text
 Coach Command
@@ -571,9 +579,7 @@ Only FWD1 Agent apply execution
 
 对于实时比赛：
 
-低延迟、高可靠性的全局广播机制，
-
-可能比复杂的实时指令路由更加稳定。
+低延迟、高可靠性的全局广播机制，可能比复杂的实时指令路由更加稳定。
 
 因此当前 Context Injection 方案主要实现：
 
@@ -661,7 +667,7 @@ X
 Agent Context
 ```
 
-导致当前 sample-agent 实现中的临场指挥链路无法生效。
+导致当前 sample-agent 实现中的临场教练指挥链路无法生效。
 
 
 未来 Agent Engineering 的核心能力，将逐渐从：
