@@ -4,7 +4,7 @@
 
 AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Strands SDK 构建的智能体实战赛事。
 
-赛事提供 Player Portal 教练临场指挥能力，允许参赛者通过自然语言输入实时战术指令（teamChat），动态影响 AI 球员的攻防决策。
+赛事提供 Player Portal 教练临场指挥能力作为比赛交互功能之一，允许参赛者通过自然语言输入实时战术指令（teamChat），动态影响 AI 球员的攻防决策。
 
 下图为赛事官方 Player Portal 教练指挥界面。
 教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
@@ -12,7 +12,7 @@ AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Str
 
 ![AWS Agentic Football Cup Player Portal](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Player%20Portal.jpg)
 
-在现场观赛和调试过程中，我注意到许多参赛者都会在 Portal 中输入：
+在现场观赛和调试过程中，注意到许多参赛者都会在 Portal 中输入：
 
 ```text
 shoot
@@ -23,17 +23,17 @@ press
 ```
 等实时战术指令。
 
-这引发了一个我对于Multi-Agent 指令作用域的探究：
+这引发了对于Multi-Agent 指令作用域的探究：
 
-- 在多个独立 Player Agent 协同决策的架构中，一条 Coach Command 如何影响每个球员？
+- 在多个独立 Player Agent 协同决策的架构中，一条教练指令如何影响每个球员？
 - 它是通过中央控制器将指令路由给目标球员，还是通过全局广播让 Agent 根据自身 Context 自主调整行为？
 
-带着这个关于 Multi-Agent Tactical Scope（多智能体战术作用域） 的问题，我进一步分析了官方 sample-agent 中 Balanced、Aggressive、Defensive、Memory、Gateway 等模板的源码调用链。
+围绕这一Multi-Agent指令作用域问题，对官方 sample-agent 中 Balanced、Aggressive、Defensive、Memory、Gateway 等模板的源码调用链进行了分析。
 
 
 然而分析过程中发现：
 
-> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context，导致Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
+> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context，导致 Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
 
 ---
 
@@ -434,7 +434,7 @@ Adaptive Team Strategy
 
 说明：
 
-由于 workshop 仅开放短暂时效，本人当前已失去赛事环境操作权限，无法完成最终部署验证。
+由于 workshop 仅开放短暂时效，当前已无法访问赛事环境，因此未完成最终部署验证。
 
 本文方案基于：
 
