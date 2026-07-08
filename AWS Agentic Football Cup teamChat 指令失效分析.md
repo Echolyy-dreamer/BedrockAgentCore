@@ -1,4 +1,4 @@
-# AWS Agentic Football Cup teamChat 指令失效分析：一次 Agent Context Engineering 缺口实践复盘
+# AWS Agentic Football Cup teamChat 指令失效分析：从 Context Injection 缺口到 Agent 指令作用域设计
 
 ## 背景简介
 
@@ -15,17 +15,19 @@ AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Str
 示例：
 
 ```text
-Fwd shoot on sight
 Defend deep
+Press high
+Play possession
+Attack left wing
 ```
 
 然而在实际调试过程中发现：
 
 > Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
 
-基于公开 sample-agent 实现版本，对 Balanced、Memory、Gateway 三套模板进行源码链路分析后发现：
+基于公开 sample-agent 实现版本，对 Balanced、Aggressive、Defensive、Memory、Gateway 等预置模板进行源码链路分析后发现：：
 
-> 当前 sample-agent 实现中未发现 teamChat 注入 Agent Context 的处理逻辑。
+> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context。
 
 ---
 
@@ -92,20 +94,32 @@ gameState
 
 # 2. 当前 summarize_state() 提取范围
 
-在当前 sample-agent 架构中，
-summarize_state() 实际承担 Raw GameState 到 Agent 输入上下文（state_summary）的转换职责。因此 summarize_state() 是整个 Agent Context Pipeline 中的关键 Context Builder。
-任何未在此阶段转换的数据，都不会自然进入后续 LLM 推理流程。
+在当前 sample-agent 架构中：
 
-当前summarize_state主要提取以下信息。
+summarize_state()
+
+承担：
+
+Raw GameState
+
+↓
+
+Agent Input Context
+
+的转换职责。
+
+它是整个 Agent Context Pipeline 中的重要 Context Builder。
+
+当前主要提取：
 
 ## 比赛基础状态
 
 包含：
 
-- gameTime
-- score
-- playMode
-- teamId
+- 比赛时间
+- 比分
+- 比赛模式
+- 队伍 ID
 
 ---
 
@@ -113,9 +127,8 @@ summarize_state() 实际承担 Raw GameState 到 Agent 输入上下文（state_s
 
 包含：
 
-- ball position
-- possession player
-- 当前控球归属
+- 球位置
+- 控球信息
 
 ---
 
@@ -123,9 +136,9 @@ summarize_state() 实际承担 Raw GameState 到 Agent 输入上下文（state_s
 
 包含：
 
-- player position
-- stamina
-- distance to ball
+- 控制球员场上位置 
+- 体力值 （stamina）
+- 距离足球距离 
 - 是否持球
 - 与对方球门距离
 
@@ -408,15 +421,11 @@ LLM Reasoning
 Adaptive Team Strategy
 ```
 
----
-
-# 7. 理论修复效果
-
 完成 Context Injection 后：
 
 - Player Portal 战术指令进入 Agent 推理上下文；
 - Memory 模式可以保存已经进入 Context 的战术信息；
-- Balanced / Memory / Gateway 三种模板共享修复逻辑；
+- Balanced、Aggressive、Defensive、Memory、Gateway 各模板共享修复逻辑；
 - 全队球员可以获得临场战术信息。
 
 说明：
@@ -433,7 +442,138 @@ Adaptive Team Strategy
 
 ---
 
-# 8. Agent 系统架构启示
+# 7. teamChat 指令作用域设计
+
+Context Injection 修复解决的是：
+
+teamChat
+
+↓
+
+Agent Context
+
+的数据链路问题。
+
+但它不等于：
+
+teamChat
+
+↓
+
+指定球员执行
+
+当前架构中：
+
+每个球员拥有独立 Agent。
+
+例如：
+
+MY_PLAYER_ID = 3
+
+POSITION_LABEL = "FWD1"
+
+这些信息只用于描述：
+
+当前 Agent 控制的是哪一个球员。
+
+但所有 Agent 接收到的是同一个：
+
+gameState.teamChat
+
+因此当前机制天然更适合：
+
+全局战术广播
+
+例如：
+
+Defend deep
+
+Press high
+
+Keep possession
+
+Attack left wing
+
+这类指令用于改变整体战术风格。
+
+类似真实比赛中的场边喊话：
+
+所有球员接收到同一战术意图；
+每个 Agent 根据自身位置、球权、视野和状态自主调整行为。
+
+---
+
+# 8. 单球员指令与实时延迟权衡
+
+如果希望支持教练采用点名式口语喊话，如真实比赛里场边直接呼喊「FWD1 抓住机会立刻射门」：
+
+FWD1 shoot now
+
+Player 3 move forward
+
+GK stay back
+
+则需要增加额外机制：
+
+Instruction Parsing
+
+↓
+
+Target Detection
+
+↓
+
+Player Routing
+
+例如：
+
+FWD1 shoot now
+
+↓
+
+POSITION_LABEL == FWD1
+
+↓
+
+Only FWD1 execute
+
+这种设计可以提高指令精确度。
+
+但是在实时足球环境中，需要考虑：
+
+NLP 解析时间；
+额外推理步骤；
+Agent 决策延迟；
+Tick 时间预算；
+球员标识匹配稳定性。
+
+因此需要权衡：
+
+Command Precision
+
+        vs
+
+Decision Latency
+
+更精确的单球员控制能力，可能增加 Agent 决策路径长度。
+
+对于实时比赛：
+
+低延迟、高可靠性的全局广播机制，
+
+可能比复杂的实时指令路由更加稳定。
+
+因此当前 Context Injection 方案主要实现：
+
+Coach Command Awareness
+
+而不是：
+
+Individual Player Command Routing
+
+---
+
+# 9. Agent 系统架构启示
 
 传统软件：
 
@@ -522,7 +662,7 @@ Context Engineering
 
 ---
 **Many Agent failures are not caused by code execution errors, but by missing or incorrect context construction.**
-在 Agent 系统中，许多问题并非表现为代码执行错误，而是表现为上下文构建链路缺失、信息丢失或语义转换不足。
+
 
 # 9. 最终结论
 
