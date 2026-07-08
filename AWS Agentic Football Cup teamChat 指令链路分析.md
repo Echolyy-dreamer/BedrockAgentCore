@@ -1,18 +1,18 @@
-# AWS Agentic Football Cup teamChat 指令链路分析：从 Context Injection 缺口到 Agent 指令作用域设计
+# AWS Agentic Football Cup teamChat 指令链路分析：从 Context Injection 缺口到 Coach Command Scope 设计
 
 ## 背景简介
 
 AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Strands SDK 构建的智能体实战赛事。
 
-Player Portal 教练临场指挥能力作为比赛交互功能之一，允许参赛者通过自然语言输入实时战术指令（teamChat），辅助 AI 球员进行动态攻防决策。
+教练临场指挥能力作为比赛交互功能之一，允许参赛者通过自然语言输入实时战术指令（teamChat），辅助 AI 球员进行动态攻防决策。
 
 下图为赛事官方 Player Portal 教练指挥界面。
 教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
 该指令会随比赛状态一起传递至后端 `gameState.teamChat` 字段，由 Agent 服务接收。
 
-![AWS Agentic Football Cup Player Portal](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Player%20Portal.jpg)
+![Coach Instruction](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/coach_instruction.png)
 
-在现场观赛和调试过程中，注意到许多参赛者都会在 Portal 中输入：
+在观赛过程中，参赛者会通过 Portal 输入：
 
 ```text
 shoot
@@ -23,17 +23,17 @@ press
 ```
 等实时战术指令。
 
-这引发了对于Multi-Agent 指令作用域的探究：
+这引发了对于 Multi-Agent 指令作用域的探究：
 
 - 在多个独立 Player Agent 协同决策的架构中，一条教练指令如何影响每个球员？
 - 它是通过中央控制器将指令路由给目标球员，还是通过全局广播让 Agent 根据自身 Context 自主调整行为？
 
-围绕这一Multi-Agent指令作用域问题，对官方 sample-agent 中 Balanced、Aggressive、Defensive、Memory、Gateway 等模板的源码调用链进行了分析。
+围绕这一 Multi-Agent 指令作用域问题，对官方 sample-agent 中 Balanced、Aggressive、Defensive、Memory、Gateway 等模板的源码调用链进行了分析。
 
 
 然而分析过程中发现：
 
-> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context，导致 Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
+> 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context，导致 Player Portal 可以正常发送 teamChat 指令，但 AI 球员无法感知该指令，因此不会基于该指令调整行为。
 
 ---
 
@@ -319,7 +319,7 @@ Gateway 模板增加：
 with mcp_client:
     response = agent(state_summary)
 ```
-
+> 注：以上代码为示意代码，用于表示 Gateway 模式下 Agent 与 MCP Client 的调用关系。
 MCP Gateway 提供的是：
 
 ```text
@@ -562,24 +562,23 @@ POSITION_LABEL == "FWD1"
 
 ↓
 
-Only FWD1 Agent apply execution 
+Only FWD1 Agent applies execution 
 ```
 
-这种设计可以提高指令精确度。 
-但是在实时足球环境中，需要权衡：
+这种设计可以提高单球员指令精度，但同时会增加额外解析和路由成本。
+
+实时比赛需要在：
 
 ```text
-- 指令精确度
-- 决策延迟
+Command Precision
+
+vs
+
+Decision Latency
 ```
+之间进行权衡。
 
-两者之间需要进行实时性权衡。
-
-更精确的单球员控制能力，可能增加 Agent 决策路径长度。
-
-对于实时比赛：
-
-低延迟、高可靠性的全局广播机制，可能比复杂的实时指令路由更加稳定。
+更精确的单球员控制能力，可能增加 Agent 决策路径长度。因此，在实时环境中，低延迟、高可靠性的全局广播机制可能比复杂的实时指令路由更加稳定。
 
 因此当前 Context Injection 方案主要实现：
 
@@ -729,7 +728,7 @@ Agent Context
 
 # 参考链接
 
-Official Agentic Football Cup Sample Workshop Workshop:
+Official Agentic Football Cup Sample Workshop:
 https://catalog.workshops.aws/agentic-football/en-US 
 
 # 作者简介
