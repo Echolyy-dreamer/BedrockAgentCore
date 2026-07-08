@@ -255,7 +255,7 @@ Coach Tactical Instruction
 
 ## Memory ≠ Input Parser
 
-很多开发者会认为：
+一个常见认知误区是：
 
 > 开启 Memory 后，Agent 会自动记住 Player Portal 下发的指令。
 
@@ -305,7 +305,7 @@ Agent Context
 
 ---
 
-# 5. Gateway 模板核心误区
+# 5. Gateway 模板能力边界
 
 Gateway 模板增加：
 
@@ -426,7 +426,7 @@ Adaptive Team Strategy
 - Player Portal 战术指令进入 Agent 推理上下文；
 - Memory 模式可以保存已经进入 Context 的战术信息；
 - Balanced、Aggressive、Defensive、Memory、Gateway 各模板共享修复逻辑；
-- 全队球员可以获得临场战术信息。
+- 全队球员可以获得临场战术信息,并结合自身状态进行决策。
 
 说明：
 
@@ -486,6 +486,7 @@ gameState.teamChat
 
 例如：
 
+```text
 Defend deep
 
 Press high
@@ -493,27 +494,34 @@ Press high
 Keep possession
 
 Attack left wing
+```
 
 这类指令用于改变整体战术风格。
 
 类似真实比赛中的场边喊话：
 
-所有球员接收到同一战术意图；
+所有球员接收到同一战术意图，
 每个 Agent 根据自身位置、球权、视野和状态自主调整行为。
 
 ---
 
 # 8. 单球员指令与实时延迟权衡
 
-如果希望支持教练采用点名式口语喊话，如真实比赛里场边直接呼喊「FWD1 抓住机会立刻射门」：
+如果希望支持教练采用点名式口语喊话，如真实比赛里场边直接呼喊：
 
+```text
 FWD1 shoot now
 
 Player 3 move forward
 
 GK stay back
+```
 
 则需要增加额外机制：
+
+Coach Command
+
+↓
 
 Instruction Parsing
 
@@ -525,35 +533,41 @@ Target Detection
 
 Player Routing
 
+↓
+
+Target Agent Execution
+
 例如：
 
 FWD1 shoot now
 
 ↓
 
-POSITION_LABEL == FWD1
+Target Detection
 
 ↓
 
-Only FWD1 execute
+POSITION_LABEL == "FWD1"
 
-这种设计可以提高指令精确度。
+↓
 
+Only FWD1 Agent receives execution hint
+
+这种设计可以提高指令精确度。 
 但是在实时足球环境中，需要考虑：
 
-NLP 解析时间；
-额外推理步骤；
-Agent 决策延迟；
-Tick 时间预算；
-球员标识匹配稳定性。
+- NLP 解析时间；
+- 额外推理步骤；
+- Agent 决策延迟；
+- Tick 时间预算；
+- 球员标识匹配稳定性。
 
 因此需要权衡：
 
-Command Precision
+- Command Precision（指令精确度）
+- Decision Latency（决策延迟）
 
-        vs
-
-Decision Latency
+两者之间需要进行实时性权衡。
 
 更精确的单球员控制能力，可能增加 Agent 决策路径长度。
 
@@ -661,10 +675,10 @@ Context Engineering
 ```
 
 ---
-**Many Agent failures are not caused by code execution errors, but by missing or incorrect context construction.**
+**> 在 Agent 系统中，许多问题并非表现为代码执行失败，而是表现为上下文构建链路缺失、信息丢失或语义转换不足.**
 
 
-# 9. 最终结论
+# 10. 最终结论
 
 ## 各层级链路状态汇总
 
@@ -708,11 +722,12 @@ Agent Context
 
 **Echo Liu**
 
-Cloud & AI Agent Engineering Enthusiast.
+Cloud & AI Agent 技术爱好者一枚.
 
 # 参考链接
-Official Agentic Football Cup Sample Workshop Repo:
-https://github.com/aws-samples/agentic-football-cup
+
+Official Agentic Football Cup Sample Workshop Workshop:
+https://catalog.workshops.aws/agentic-football/en-US 
 
 
 ---
