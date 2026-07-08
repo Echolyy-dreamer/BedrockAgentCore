@@ -446,21 +446,25 @@ Adaptive Team Strategy
 
 Context Injection 修复解决的是：
 
+```text
 teamChat
 
 ↓
 
 Agent Context
+```
 
 的数据链路问题。
 
 但它不等于：
 
+```text
 teamChat
 
 ↓
 
 指定球员执行
+```
 
 当前架构中：
 
@@ -468,9 +472,11 @@ teamChat
 
 例如：
 
+```text
 MY_PLAYER_ID = 3
 
 POSITION_LABEL = "FWD1"
+```
 
 这些信息只用于描述：
 
@@ -517,33 +523,32 @@ Player 3 move forward
 GK stay back
 ```
 
-则需要增加额外机制：
+则需要增加额外机制, 比如Agent 自主指令识别（Agent-side Command Filtering），所有 Agent 接收同一个 Coach Command，由每个 Agent 根据自身 Context 判断是否与自己相关：
 
+```text
 Coach Command
 
 ↓
 
-Instruction Parsing
+All Agents
 
 ↓
 
-Target Detection
+Self Filtering
 
 ↓
 
-Player Routing
-
-↓
-
-Target Agent Execution
+Individual Action
+```
 
 例如：
 
+```text
 FWD1 shoot now
 
 ↓
 
-Target Detection
+Agent-side Command Filtering
 
 ↓
 
@@ -551,21 +556,16 @@ POSITION_LABEL == "FWD1"
 
 ↓
 
-Only FWD1 Agent receives execution hint
+Only FWD1 Agent apply execution 
+```
 
 这种设计可以提高指令精确度。 
-但是在实时足球环境中，需要考虑：
+但是在实时足球环境中，需要权衡：
 
-- NLP 解析时间；
-- 额外推理步骤；
-- Agent 决策延迟；
-- Tick 时间预算；
-- 球员标识匹配稳定性。
-
-因此需要权衡：
-
-- Command Precision（指令精确度）
-- Decision Latency（决策延迟）
+```text
+- 指令精确度
+- 决策延迟
+```
 
 两者之间需要进行实时性权衡。
 
@@ -579,11 +579,15 @@ Only FWD1 Agent receives execution hint
 
 因此当前 Context Injection 方案主要实现：
 
+```text
 Coach Command Awareness
+```
 
 而不是：
 
+```text
 Individual Player Command Routing
+```
 
 ---
 
@@ -675,7 +679,7 @@ Context Engineering
 ```
 
 ---
-**> 在 Agent 系统中，许多问题并非表现为代码执行失败，而是表现为上下文构建链路缺失、信息丢失或语义转换不足.**
+**> 在 Agent 系统中，模型能力决定推理上限，而 Context Pipeline 决定模型能够感知什么。当关键输入未跨越上下文边界时，再强大的推理模型也无法基于不存在的信息做出正确决策。**
 
 
 # 10. 最终结论
@@ -718,16 +722,16 @@ Agent Context
 
 ---
 
+# 参考链接
+
+Official Agentic Football Cup Sample Workshop Workshop:
+https://catalog.workshops.aws/agentic-football/en-US 
+
 # 作者简介
 
 **Echo Liu**
 
 Cloud & AI Agent 技术爱好者一枚.
-
-# 参考链接
-
-Official Agentic Football Cup Sample Workshop Workshop:
-https://catalog.workshops.aws/agentic-football/en-US 
 
 
 ---
