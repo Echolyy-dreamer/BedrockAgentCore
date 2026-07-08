@@ -1,4 +1,4 @@
-# # AWS Agentic Football Cup teamChat 指令链路分析：从 Context Injection 缺口到 Agent 指令作用域设计
+# AWS Agentic Football Cup teamChat 指令链路分析：从 Context Injection 缺口到 Agent 指令作用域设计
 
 ## 背景简介
 
