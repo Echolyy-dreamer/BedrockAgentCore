@@ -1,4 +1,4 @@
-# AWS Agentic Football Cup teamChat 指令失效分析：从 Context Injection 缺口到 Agent 指令作用域设计
+# # AWS Agentic Football Cup teamChat 指令链路分析：从 Context Injection 缺口到 Agent 指令作用域设计
 
 ## 背景简介
 
@@ -25,7 +25,7 @@ Attack left wing
 
 > Player Portal 可以正常发送 teamChat 指令，但 AI 球员不会根据指令调整行为。
 
-基于公开 sample-agent 实现版本，对 Balanced、Aggressive、Defensive、Memory、Gateway 等预置模板进行源码链路分析后发现：：
+基于公开 sample-agent 实现版本，对 Balanced、Aggressive、Defensive、Memory、Gateway 等预置模板进行源码链路分析后发现：
 
 > 当前 sample-agent 实现中，gameState.teamChat 虽然已经到达 Agent 服务，但没有经过 Context Construction 层进入 Agent Context。
 
@@ -342,9 +342,7 @@ Agent Context
 
 因此：
 
-> MCP Gateway ≠ Context Injection
-
-即使开启 Gateway，如果 teamChat 没进入 Context，LLM 仍然无法感知战术指令。
+- 即使开启 Gateway，如果 teamChat 没进入 Context，LLM 仍然无法感知战术指令。
 
 ---
 
@@ -426,7 +424,7 @@ Adaptive Team Strategy
 - Player Portal 战术指令进入 Agent 推理上下文；
 - Memory 模式可以保存已经进入 Context 的战术信息；
 - Balanced、Aggressive、Defensive、Memory、Gateway 各模板共享修复逻辑；
-- 全队球员可以获得临场战术信息,并结合自身状态进行决策。
+- 全队球员可以获得临场战术信息,并在自身状态和局部观察基础上进行决策。
 
 说明：
 
@@ -523,7 +521,7 @@ Player 3 move forward
 GK stay back
 ```
 
-则需要增加额外机制, 比如Agent 自主指令识别（Agent-side Command Filtering），所有 Agent 接收同一个 Coach Command，由每个 Agent 根据自身 Context 判断是否与自己相关：
+则需要增加额外机制, 例如采用 Agent-side Command Filtering（Agent 自主指令过滤机制)，所有 Agent 接收同一个 Coach Command，由每个 Agent 根据自身 Context 判断是否与自己相关：
 
 ```text
 Coach Command
@@ -638,7 +636,7 @@ Agent 系统中的大量问题，并不一定表现为：
 
 而可能表现为：
 
-> 数据没有进入正确 Context。
+> 数据没有进入正确 Context Boundary。
 
 
 本案例：
@@ -691,10 +689,11 @@ Context Engineering
 |---|---|
 | Player Portal 通信 | ✅ 正常 |
 | GameState 数据传输 | ✅ 正常 |
+| Context Builder 字段映射 | ❌ 缺少 teamChat |
 | Bedrock 模型能力 | ✅ 正常 |
 | Strands Memory | ✅ 正常 |
 | MCP Gateway 能力 | ✅ 正常 |
-| teamChat Context Injection | ❌ Not Found in Current Implementation |
+| teamChat Context Injection | ❌ 未实现 |
 
 
 ## 核心原因
