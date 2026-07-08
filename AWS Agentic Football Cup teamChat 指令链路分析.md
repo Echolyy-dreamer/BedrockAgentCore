@@ -23,7 +23,7 @@ press
 ```
 等实时战术指令。
 
-这引发了一个关于 Multi-Agent 指令作用域的问题：
+这引发了一个我对于Multi-Agent 指令作用域的探究：
 
 - 在多个独立 Player Agent 协同决策的架构中，一条 Coach Command 如何影响每个球员？
 - 它是通过中央控制器将指令路由给目标球员，还是通过全局广播让 Agent 根据自身 Context 自主调整行为？
