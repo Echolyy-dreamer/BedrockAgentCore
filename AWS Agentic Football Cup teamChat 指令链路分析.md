@@ -4,7 +4,7 @@
 
 AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Strands SDK 构建的智能体实战赛事。
 
-赛事提供 Player Portal 教练临场指挥能力作为比赛交互功能之一，允许参赛者通过自然语言输入实时战术指令（teamChat），动态影响 AI 球员的攻防决策。
+Player Portal 教练临场指挥能力作为比赛交互功能之一，允许参赛者通过自然语言输入实时战术指令（teamChat），辅助 AI 球员进行动态攻防决策。
 
 下图为赛事官方 Player Portal 教练指挥界面。
 教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
