@@ -319,7 +319,7 @@ Gateway 模板增加：
 with mcp_client:
     response = agent(state_summary)
 ```
-> 注：以上代码为示意代码，用于表示 Gateway 模式下 Agent 与 MCP Client 的调用关系。
+
 MCP Gateway 提供的是：
 
 ```text
