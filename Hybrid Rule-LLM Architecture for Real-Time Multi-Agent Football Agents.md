@@ -1,13 +1,19 @@
-# Hybrid Rule-LLM Architecture for Real-Time Multi-Agent Decision Making
+# Beyond Prompt Engineering: Hybrid Rule-LLM Architecture for Real-Time Multi-Agent Decision Making
+
+Lessons from AWS Agentic Football Cup
+
+## Introduction
+
+**AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents. During the AWS Agentic Football Cup workshop, many teams focused on improving agent performance through prompt engineering: refining instructions, adjusting roles, and tuning LLM responses.
+
+While prompt optimization improves reasoning quality, it does not address all challenges in real-time agent systems. Decision latency, unnecessary reasoning, and invalid actions are often caused by the decision architecture itself rather than the prompt.
+
+This article explores an alternative optimization direction: improving the agent decision pipeline through a hybrid architecture that combines deterministic rules, LLM reasoning, and validation control.
 
 > **Rules handle certainty. LLMs handle uncertainty. Validation ensures reliability.**
 
----
-## Background
 
-**AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents.
-
-In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every decision cycle.
+In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). LLM inference is the primary decision mechanism for every decision cycle. 
 
 The current decision pipeline can be summarized as:
 
@@ -38,7 +44,7 @@ This architecture enables flexible tactical reasoning, but it also introduces se
 
 This motivates a hybrid architecture that combines deterministic rules, LLM reasoning, and validation control.
 
-------------------------------------------------------------------------
+---
 
 # 1. Proposed Hybrid Architecture
 
@@ -58,7 +64,7 @@ flowchart TB
     CMD --> ENGINE["Game Engine Execution"]:::box
 ```
 
-------------------------------------------------------------------------
+---
 
 # 2. Decision Routing
 
@@ -69,7 +75,7 @@ The Decision Router classifies each decision cycle and selects the appropriate p
 | Deterministic / time-critical | Fast Decision Layer |
 | Tactical / uncertain | LLM Reasoning Layer |
 
-------------------------------------------------------------------------
+---
 
 # 3. Fast Decision Layer
 
@@ -130,7 +136,7 @@ INTERCEPT
 
 without waiting for LLM reasoning.
 
-------------------------------------------------------------------------
+---
 
 # 4. LLM Reasoning Layer
 
@@ -155,7 +161,7 @@ The LLM provides:
 -   Strategic decisions.
 -   Adaptive behavior.
 
-------------------------------------------------------------------------
+---
 
 # 5. Validation Control Layer
 
@@ -253,7 +259,7 @@ is reserved for tactical decisions requiring contextual evaluation.
 
 ## Execution Reliability
 
-Validation Control Layer ensures generated commands satisfy game environment, and role constraints before execution.
+Validation Control Layer ensures generated commands satisfy game environment and role constraints before execution.
 
 ## Resource Efficiency
 
