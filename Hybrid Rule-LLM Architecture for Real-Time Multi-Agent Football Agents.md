@@ -4,7 +4,7 @@
 
 AWS Agentic Football Cup is a real-time multi-agent football simulation environment built around autonomous player agents.
 
-In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every game tick.
+In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every decision cycle.
 
 The current decision pipeline can be summarized as:
 
@@ -37,31 +37,24 @@ In football simulation, many decisions have fundamentally different characterist
 
 For example:
 
-Deterministic and time-sensitive decisions
+**Deterministic and time-sensitive decisions**
 
-Examples:
-
-Immediate shooting opportunity.
-Emergency interception.
-Blocking an incoming shot.
-Avoiding impossible actions.
+- Immediate shooting opportunity.
+- Emergency interception.
+- Blocking an incoming shot.
 
 These situations often have clear conditions and do not require complex reasoning.
 
-Strategic and context-dependent decisions
+**Strategic and context-dependent decisions**
 
-Examples:
-
-Whether to press or retreat.
-How to respond to coach instructions.
-How to coordinate positioning with teammates.
-Whether to maintain possession or attempt an attack.
+- Whether to press or retreat.
+- How to respond to coach instructions.
+- How to coordinate positioning with teammates.
+- Whether to maintain possession or attempt an attack.
 
 These situations benefit from LLM reasoning.
 
 Therefore, instead of using LLM reasoning for every decision, a hybrid architecture is proposed:
-
-A hybrid architecture is proposed:
 
 ``` text
 Fast Decision Layer
@@ -70,23 +63,22 @@ LLM Reasoning Layer
         +
 Validation Control Layer
 ```
-
-><font size="7">**The goal is to use deterministic systems for certainty and LLMs for uncertainty.**</font>
-
 ------------------------------------------------------------------------
 
 # 1. Proposed Hybrid Architecture
 
 ```mermaid
+%%{init: { 'flowchart': { 'nodeSpacing': 40, 'rankSpacing': 50 }, 'theme':'base' }}%%
 flowchart TB
-    STATE["Game Environment State"] --> ROUTER["Decision Router Layer<br/>Classify Decision Type"]
+    classDef box fill:#f3f0ff,stroke:#9988cc,color:#222,stroke-width:1px
+    STATE["Game Environment State"]:::box --> ROUTER["Decision Router Layer<br/>Classify Decision Type"]:::box
     
-    ROUTER --> FAST["Fast Decision Layer<br/>Deterministic Rules<br/><br/>• Shooting Window<br/>• Emergency Interception"]
-    ROUTER --> LLM["LLM Reasoning Layer<br/>Tactical Decisions<br/><br/>• Press / Retreat<br/>• Pass / Carry"]
+    ROUTER -->|High-confidence scenario| FAST["Fast Decision Layer<br/>Deterministic Rules<br/><br/>• Shooting Window<br/>• Emergency Interception"]:::box
+    ROUTER -->|Ambiguous tactical scenario| LLM["LLM Reasoning Layer<br/>Tactical Decisions<br/><br/>• Press / Retreat<br/>• Pass / Carry"]:::box
 
-    FAST & LLM --> VALIDATION["Validation Control Layer<br/>Physical & Rule Constraints"]
-    VALIDATION --> CMD["Validated Player Command"]
-    CMD --> ENGINE["Game Engine Execution"]
+    FAST & LLM --> VALIDATION["Validation Control Layer<br/>Physical & Rule Constraints"]:::box
+    VALIDATION --> CMD["Validated Player Command"]:::box
+    CMD --> ENGINE["Game Engine Execution"]:::box
 ```
 
 ------------------------------------------------------------------------
@@ -113,16 +105,7 @@ It classifies each situation and routes it to the most appropriate processing pa
 
 The Fast Decision Layer handles high-confidence situations before LLM reasoning.
 
-It reduces unnecessary LLM inference and provides deterministic responses for time-critical scenarios where the correct action can be explicitly defined by rules.
-
-In real-time football environments, some decisions do not require probabilistic reasoning and can be resolved directly through deterministic logic.
-
-Examples:
-
-- Clear shooting opportunity.
-- Emergency interception.
-- Blocking an incoming shot.
-------------------------------------------------------------------------
+It reduces unnecessary LLM inference and provides deterministic responses for time-critical scenarios where the reliable action can be explicitly defined by rules.
 
 ## Example Scenarios
 
@@ -173,7 +156,7 @@ Rule Engine
 Action: SHOOT
 ```
 ![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
-------------------------------------------------------------------------
+
 
 ### Emergency Interception
 
@@ -194,7 +177,7 @@ Defender can intercept
 The Fast Decision Layer can immediately execute:
 
 ``` text
-INTERCEPT / BLOCK
+INTERCEPT
 ```
 
 without waiting for LLM reasoning.
@@ -202,7 +185,7 @@ without waiting for LLM reasoning.
 
 ------------------------------------------------------------------------
 
-# 5. LLM Reasoning Layer
+# 4. LLM Reasoning Layer
 
 ## Purpose
 
@@ -227,7 +210,7 @@ The LLM provides:
 
 ------------------------------------------------------------------------
 
-# 6. Validation Control Layer
+# 5. Validation Control Layer
 
 ## Purpose
 
@@ -247,43 +230,28 @@ It enforces deterministic constraints such as:
 - game state consistency.
 
 Pipeline:
+```mermaid
+%%{init: { 'flowchart': { 'nodeSpacing': 40, 'rankSpacing': 50 }, 'theme':'base' }}%%
+flowchart TB
+    classDef box fill:#f3f0ff,stroke:#9988cc,color:#222,stroke-width:1px
+    LLM["LLM Reasoning Layer"]:::box
+    CMD["Generated Command"]:::box
+    PARSER["Command Parser"]:::box
+    VALIDATION["Validation Control Layer<br/>State & Rule Constraints"]:::box
+    EXECUTE["Game Engine Execution"]:::box
+    FALLBACK["Existing Fallback Mechanism"]:::box
 
-```text
-LLM Reasoning Layer
-
-        |
-
-        v
-
-Generated Command
-
-        |
-
-        v
-
-Command Parser
-        |
-        |
-        +---- Invalid Format ----> Existing Fallback
-
-        |
-
-        v
-
-Validation Control Layer
-
-        |
-
-        +---- Valid State Constraint ----> Execute
-
-        |
-
-        +---- Invalid State Constraint --> Fallback Action
+    LLM --> CMD
+    CMD --> PARSER
+    PARSER -->|Parse Failure| FALLBACK
+    PARSER -->|Valid Command| VALIDATION
+    VALIDATION -->|Valid State| EXECUTE
+    VALIDATION -->|Invalid State| FALLBACK
 ```
 
 ------------------------------------------------------------------------
 
-## Example: Physics Constraint Violation
+## Example Scenario: Environment Constraint Validation
 
 ![Validation](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
 
@@ -291,17 +259,16 @@ Observed failure scenario:
 
 A goalkeeper agent generated a PASS command while the player did not have ball possession.
 
+Raw Log Observation:
+
 ![Validation_Layer](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation_layer_example.png)
 
-Raw Log Observation
 Summarized State Summary:
-
 
 ``` text
 YOUR PLAYER (GK, id=0): pos=(-5.5,0.0) distBall=4.6 hasBall=False
 Ball: (-0.9,0.1) held by MY player 4
 ```
-
 
 LLM generated command:
 
@@ -330,11 +297,11 @@ Trigger fallback rule engine to generate safe position-relative commands.
 
 >Under the current architecture, this invalid command would be delivered directly. The LLM produces parsable JSON, so no runtime exception is raised, and the existing exception-driven fallback mechanism never activates.
 
-# 7. Benefits
+# 6. Benefits
 
 ## Latency Control
 
-Critical events bypass LLM:
+-   Critical events bypass LLM:
 
 ``` text
 Emergency Event
@@ -357,73 +324,60 @@ Complex decisions use:
 ``` text
 LLM Reasoning
 ```
+## Token Consumption Reduction
+-   High-frequency emergency reactions avoid LLM invocation, cutting token consumption and reducing runtime inference costs.
+
+## **Decision Quality**
+-   Deterministic rules guarantee stable responses, while LLM provides flexible tactical reasoning.
+
+## **Command Safety &amp; Robustness**
+
+The Validation Control Layer provides a safety boundary between LLM-generated decisions and game execution.
+
+It prevents:
+
+-   physically impossible actions;
+-   state-inconsistent commands;
+-   role constraint violations.
 
 ------------------------------------------------------------------------
 
-## Reliability
+# 7. Conclusion
 
-Rules provide:
+For real-time multi-agent decision systems, an LLM-only architecture introduces unnecessary latency and reliability risks for deterministic and constraint-sensitive decisions.
 
--   Deterministic behavior.
--   Constraint enforcement.
--   Predictable execution.
-
-LLM provides:
-
--   Reasoning.
--   Adaptation.
--   Strategic flexibility.
-
-------------------------------------------------------------------------
-
-## Observability
-
-Each action has a clear source:
+A hybrid architecture separates decision responsibilities:
 
 ``` text
-Action Source:
+Fast Decision Layer
 
-RULE
+        |
+        v
 
-or
+Handles deterministic and time-critical situations
 
-LLM
+
+LLM Reasoning Layer
+
+        |
+        v
+
+Handles tactical and context-dependent decisions
+
+
+Validation Control Layer
+
+        |
+        v
+
+Ensures generated commands are executable under current game constraints
 ```
 
-------------------------------------------------------------------------
-
-# 8. Design Principle
-
-The core principle:
-> **Rules handle certainty. LLMs handle uncertainty.**
-
-------------------------------------------------------------------------
-
-# Conclusion
-
-For real-time multi-agent decision systems, an LLM-only architecture may
-introduce latency and reliability challenges.
-
-A hybrid architecture combining:
-
-``` text
-Fast deterministic rules
-
-+
-
-LLM tactical reasoning
-
-+
-
-Validation constraints
-```
-
-provides a better balance between:
+This architecture provides a balance between:
 
 -   Reaction speed.
 -   Tactical intelligence.
 -   System reliability.
 
-LLMs should be used where reasoning is required, while deterministic
-layers should handle situations where the correct action is already
-known.
+The core principle:
+> **Rules handle certainty. LLMs handle uncertainty. Validation ensures reliability.**
