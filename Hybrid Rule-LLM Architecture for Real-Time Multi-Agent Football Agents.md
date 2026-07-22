@@ -4,36 +4,16 @@
 
 AWS Agentic Football Cup is a real-time multi-agent football simulation environment built around autonomous player agents.
 
-In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (approximately every 2 seconds).
+In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (approximately every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every game tick.
 
 The current decision pipeline can be summarized as:
-``` text
-Game Environment State
-
-        |
-
-        v
-
-Individual Player Agent
-
-        |
-
-        v
-
-LLM Reasoning
-
-        |
-
-        v
-
-Player Command
-
-        |
-
-        v
-
-Game Engine Execution
-```
+```mermaid
+flowchart TD
+    A[Game Environment State]
+        --> B[Individual Player Agent]
+        --> C[LLM Reasoning Layer]
+        --> D[Player Command]
+        --> E[Game Engine Execution]
 
 Each agent receives the current game state, performs LLM reasoning, and returns an action command controlling the corresponding player.
 
@@ -116,68 +96,65 @@ Not every decision benefits from LLM reasoning.
 
 # 2. Proposed Hybrid Architecture
 
-``` text
-                 Game Engine State
+```mermaid
+flowchart TD
+    A[Game Environment State]
+        --> B[Decision Router]
 
-                        |
-                        v
+    B --> C[Fast Decision Layer<br/>Deterministic Rules]
+    B --> D[LLM Reasoning Layer<br/>Tactical Decisions]
 
-              Decision Router Layer
+    C --> E[Validation Control Layer]
+    D --> E
 
-                        |
-
-        +---------------+---------------+
-        |                               |
-        v                               v
-
-Deterministic Control Path       LLM Reasoning Path
-
-(Fast Decision Layer)            (Strategic Reasoning)
-
-        |                               |
-        +---------------+---------------+
-
-                        |
-                        v
-
-             Validation Control Layer
-
-                        |
-                        v
-
-                  Action Execution
-```
+    E --> F[Player Command]
+    F --> G[Game Engine Execution]
 
 ------------------------------------------------------------------------
 
 # 3. Decision Router Layer
 
-The Decision Router determines whether a situation requires LLM
-reasoning or can be solved through deterministic rules.
+The Decision Router acts as the first decision boundary.
 
-The routing criteria include:
+It classifies each situation and routes it to the most appropriate processing path:
 
-  Situation                          Processing Path
-  ---------------------------------- ---------------------
-  High-confidence emergency action   Fast Decision Layer
-  Time-critical reaction             Fast Decision Layer
-  Tactical planning                  LLM Reasoning Layer
-  Ambiguous decision                 LLM Reasoning Layer
+- deterministic control path;
+- LLM reasoning path.
+
+| Situation | Processing Path |
+| --- | --- |
+| High-confidence emergency action | Fast Decision Layer |
+| Time-critical reaction | Fast Decision Layer |
+| Tactical planning | LLM Reasoning Layer |
+| Ambiguous decision | LLM Reasoning Layer |
 
 ------------------------------------------------------------------------
 
 # 4. Fast Decision Layer
 
-## Purpose
+The Fast Decision Layer handles high-confidence situations before LLM reasoning.
 
-The Fast Decision Layer handles situations where the optimal action can
-be defined with clear conditions.
+It reduces unnecessary LLM inference and provides deterministic responses for time-critical scenarios where the correct action can be explicitly defined by rules.
 
-Goals:
+In real-time football environments, some decisions do not require probabilistic reasoning and can be resolved directly through deterministic logic.
 
--   Reduce unnecessary LLM calls.
--   Provide immediate reactions.
--   Improve real-time responsiveness.
+Examples:
+
+- Clear shooting opportunity.
+- Emergency interception.
+- Blocking an incoming shot.
+Example:
+
+A player has:
+
+- ball possession;
+- clear shooting angle;
+- suitable distance to goal.
+
+The optimal action is highly deterministic:
+```text
+SHOOT
+```
 
 ------------------------------------------------------------------------
 
@@ -214,7 +191,8 @@ LLM Reasoning
 
     v
 
-Shoot
+Decision:
+SHOOT / PASS / MOVE TO ...
 ```
 
 The Fast Decision Layer can directly trigger:
@@ -226,7 +204,7 @@ Rule Engine
 
     v
 
-SHOOT
+Action: SHOOT
 ```
 
 ------------------------------------------------------------------------
@@ -322,57 +300,90 @@ The LLM provides:
 
 ## Purpose
 
-The Validation Control Layer checks whether LLM-generated actions are
-valid before execution.
+The Validation Control Layer performs post-LLM command verification before execution.
+
+The current system already contains fallback handling for invalid command formats or parsing failures.
+
+However, command parsing validation does not guarantee that the generated action is physically executable under the current game state.
+
+The proposed Validation Control Layer adds semantic and environment-level validation.
+
+It enforces deterministic constraints such as:
+
+- possession requirements;
+- player role constraints;
+- action feasibility;
+- game state consistency.
 
 Pipeline:
 
-``` text
-LLM Decision
+```text
+LLM Reasoning Layer
 
         |
 
         v
 
-Validation Rules
+Generated Command
 
         |
 
-        +---- Valid ----> Execute
+        v
+
+Command Parser
+        |
+        |
+        +---- Invalid Format ----> Existing Fallback
 
         |
 
-        +---- Invalid --> Fallback
+        v
+
+Validation Control Layer
+
+        |
+
+        +---- Valid State Constraint ----> Execute
+
+        |
+
+        +---- Invalid State Constraint --> Fallback Action
 ```
 
 ------------------------------------------------------------------------
 
-## Example: Invalid Goalkeeper Action
+## Example: Physics Constraint Violation
 
-LLM output:
+Observed failure scenario:
 
-``` json
-{
-  "action": "PASS",
-  "targetPlayer": 3
-}
-```
+A goalkeeper agent generated a PASS command while the player did not have ball possession.
 
-Current state:
+![Validation_Layer](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation_layer_example.png)
+
+Raw Log Observation
+Summarized State Summary:
+
 
 ``` text
-Role: Goalkeeper
-
-Ball possession: Opponent
+YOUR PLAYER (GK, id=0): pos=(-5.5,0.0) distBall=4.6 hasBall=False
+Ball: (-0.9,0.1) held by MY player 4
 ```
+
+
+LLM generated command:
+
+``` json
+[{"commandType":"PASS","target_player_id":4,"type":"GROUND"}]
+```
+
+Validation Check Logic
+Rule: Actions PASS, SHOOT require the executing player to hold possession (hasBall=True).
 
 Validation result:
 
 ``` text
-Reject action
-
-Reason:
-Player does not have possession
+Reject command
+Reason: Goalkeeper (id=0) does not possess the ball; PASS cannot be executed.
 ```
 
 Fallback:
@@ -380,34 +391,11 @@ Fallback:
 ``` text
 MOVE_TO_POSITION
 ```
-
+Recovery Path
+Trigger fallback rule engine to generate safe position-relative commands.
 ------------------------------------------------------------------------
 
-# Validation Layer Examples
-
-## Example 1: Possession Validation
-
-Reserved:
-
-``` text
-LLM Action:
-TODO
-
-Validation:
-TODO
-```
-
-------------------------------------------------------------------------
-
-## Example 2: Role Constraint Validation
-
-Example:
-
-``` text
-Goalkeeper cannot perform passing action without possession.
-```
-
-------------------------------------------------------------------------
+>Under the current architecture, this invalid command would be delivered directly. The LLM produces parsable JSON, so no runtime exception is raised, and the existing exception-driven fallback mechanism never activates.
 
 # 7. Benefits
 
@@ -473,25 +461,8 @@ LLM
 
 # 8. Design Principle
 
-The goal is not:
-
-``` text
-Replace Rules with LLM
-```
-
-or:
-
-``` text
-Replace LLM with Rules
-```
-
-The correct architecture is:
-
-``` text
-Rules handle certainty.
-
-LLMs handle uncertainty.
-```
+The core principle:
+> **Rules handle certainty. LLMs handle uncertainty.**
 
 ------------------------------------------------------------------------
 
