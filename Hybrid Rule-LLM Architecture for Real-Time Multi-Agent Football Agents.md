@@ -4,7 +4,7 @@
 
 AWS Agentic Football Cup is a real-time multi-agent football simulation environment built around autonomous player agents.
 
-In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (approximately every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every game tick.
+In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every game tick.
 
 The current decision pipeline can be summarized as:
 
@@ -24,7 +24,7 @@ flowchart TB
     CMD --> ENGINE
 ```
 
-Each agent receives the current game state, performs LLM reasoning, and returns an action command controlling the corresponding player.
+Each agent receives the current game state, performs LLM reasoning, and returns an action command (one of MOVE_TO, PASS, SHOOT, SLIDE_TACKLE, GK_DISTRIBUTE ...) controlling the corresponding player.
 
 This architecture enables flexible tactical reasoning, but it also introduces several challenges in a real-time environment:
 
@@ -71,7 +71,7 @@ LLM Reasoning Layer
 Validation Control Layer
 ```
 
-The goal is to use deterministic systems for certainty and LLMs for uncertainty.
+><font size="7">**The goal is to use deterministic systems for certainty and LLMs for uncertainty.**</font>
 
 ------------------------------------------------------------------------
 
@@ -93,11 +93,11 @@ The LLM is responsible for tactical reasoning, immediate reactions, and action v
 
 However:
 
-  Decision Type         Better Approach
-  --------------------- ---------------------
-  Emergency reaction    Deterministic rules
-  Tactical planning     LLM reasoning
-  Constraint checking   Validation rules
+| Decision Type       | Better Approach  |
+| ------------------- | ---------------- |
+| Emergency reaction  | Deterministic rules |
+| Tactical planning   | LLM reasoning |
+| Constraint checking | Validation rules |
 
 Not every decision benefits from LLM reasoning.
 
@@ -150,6 +150,7 @@ Examples:
 - Clear shooting opportunity.
 - Emergency interception.
 - Blocking an incoming shot.
+
 Example:
 
 A player has:
@@ -162,7 +163,7 @@ The optimal action is highly deterministic:
 ```text
 SHOOT
 ```
-
+![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.png)
 ------------------------------------------------------------------------
 
 ## Example Scenarios
@@ -360,6 +361,8 @@ Validation Control Layer
 ------------------------------------------------------------------------
 
 ## Example: Physics Constraint Violation
+
+![Validation](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
 
 Observed failure scenario:
 
