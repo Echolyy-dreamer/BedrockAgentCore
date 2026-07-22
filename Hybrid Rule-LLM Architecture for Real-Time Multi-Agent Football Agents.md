@@ -7,13 +7,22 @@ AWS Agentic Football Cup is a real-time multi-agent football simulation environm
 In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (approximately every 2 seconds). The current architecture treats LLM inference as the primary decision mechanism for every game tick.
 
 The current decision pipeline can be summarized as:
+
 ```mermaid
-flowchart TD
-    A[Game Environment State]
-        --> B[Individual Player Agent]
-        --> C[LLM Reasoning Layer]
-        --> D[Player Command]
-        --> E[Game Engine Execution]
+flowchart TB
+    classDef box fill:#f3f0ff,stroke:#9988cc
+
+    STATE["Game Environment State<br/>GameState Payload"]:::box
+    AGENT["Individual Player Agent<br/>One Agent per Player"]:::box
+    LLM["LLM Reasoning Layer<br/>Decision Making Every Tick"]:::box
+    CMD["Player Command<br/>MOVE / PASS / SHOOT / etc."]:::box
+    ENGINE["Game Engine Execution"]:::box
+
+    STATE --> AGENT
+    AGENT --> LLM
+    LLM --> CMD
+    CMD --> ENGINE
+```
 
 Each agent receives the current game state, performs LLM reasoning, and returns an action command controlling the corresponding player.
 
@@ -97,18 +106,16 @@ Not every decision benefits from LLM reasoning.
 # 2. Proposed Hybrid Architecture
 
 ```mermaid
-flowchart TD
-    A[Game Environment State]
-        --> B[Decision Router]
+flowchart TB
+    STATE["Game Environment State"] --> ROUTER["Decision Router Layer<br/>Classify Decision Type"]
+    
+    ROUTER --> FAST["Fast Decision Layer<br/>Deterministic Rules<br/><br/>• Shooting Window<br/>• Emergency Interception"]
+    ROUTER --> LLM["LLM Reasoning Layer<br/>Tactical Decisions<br/><br/>• Press / Retreat<br/>• Pass / Carry"]
 
-    B --> C[Fast Decision Layer<br/>Deterministic Rules]
-    B --> D[LLM Reasoning Layer<br/>Tactical Decisions]
-
-    C --> E[Validation Control Layer]
-    D --> E
-
-    E --> F[Player Command]
-    F --> G[Game Engine Execution]
+    FAST & LLM --> VALIDATION["Validation Control Layer<br/>Physical & Rule Constraints"]
+    VALIDATION --> CMD["Validated Player Command"]
+    CMD --> ENGINE["Game Engine Execution"]
+```
 
 ------------------------------------------------------------------------
 
