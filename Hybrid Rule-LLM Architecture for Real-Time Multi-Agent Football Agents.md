@@ -249,8 +249,6 @@ flowchart TB
     VALIDATION -->|Invalid State| FALLBACK
 ```
 
-------------------------------------------------------------------------
-
 ## Example Scenario: Environment Constraint Validation
 
 ![Validation](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
@@ -291,9 +289,6 @@ Fallback:
 ``` text
 MOVE_TO_POSITION
 ```
-Recovery Path
-Trigger fallback rule engine to generate safe position-relative commands.
-------------------------------------------------------------------------
 
 >Under the current architecture, this invalid command would be delivered directly. The LLM produces parsable JSON, so no runtime exception is raised, and the existing exception-driven fallback mechanism never activates.
 
