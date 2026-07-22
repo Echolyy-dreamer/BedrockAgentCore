@@ -75,35 +75,7 @@ Validation Control Layer
 
 ------------------------------------------------------------------------
 
-# 1. Limitations of LLM-only Architecture
-
-Current pipeline:
-
-``` text
-    Game State
-        |
-        v
-   LLM Reasoning
-        |
-        v
-   Action Execution
-```
-
-The LLM is responsible for tactical reasoning, immediate reactions, and action validity.
-
-However:
-
-| Decision Type       | Better Approach  |
-| ------------------- | ---------------- |
-| Emergency reaction  | Deterministic rules |
-| Tactical planning   | LLM reasoning |
-| Constraint checking | Validation rules |
-
-Not every decision benefits from LLM reasoning.
-
-------------------------------------------------------------------------
-
-# 2. Proposed Hybrid Architecture
+# 1. Proposed Hybrid Architecture
 
 ```mermaid
 flowchart TB
@@ -119,7 +91,7 @@ flowchart TB
 
 ------------------------------------------------------------------------
 
-# 3. Decision Router Layer
+# 2. Decision Router Layer
 
 The Decision Router acts as the first decision boundary.
 
@@ -137,7 +109,7 @@ It classifies each situation and routes it to the most appropriate processing pa
 
 ------------------------------------------------------------------------
 
-# 4. Fast Decision Layer
+# 3. Fast Decision Layer
 
 The Fast Decision Layer handles high-confidence situations before LLM reasoning.
 
@@ -150,20 +122,6 @@ Examples:
 - Clear shooting opportunity.
 - Emergency interception.
 - Blocking an incoming shot.
-
-Example:
-
-A player has:
-
-- ball possession;
-- clear shooting angle;
-- suitable distance to goal.
-
-The optimal action is highly deterministic:
-```text
-SHOOT
-```
-![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.png)
 ------------------------------------------------------------------------
 
 ## Example Scenarios
@@ -214,7 +172,7 @@ Rule Engine
 
 Action: SHOOT
 ```
-
+![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
 ------------------------------------------------------------------------
 
 ### Emergency Interception
@@ -241,41 +199,6 @@ INTERCEPT / BLOCK
 
 without waiting for LLM reasoning.
 
-------------------------------------------------------------------------
-
-# Fast Decision Layer Examples
-
-## Example 1: Shooting Window Detection
-
-Reserved for implementation example:
-
-``` text
-Input:
-TODO
-
-Rule:
-TODO
-
-Output:
-SHOOT
-```
-
-------------------------------------------------------------------------
-
-## Example 2: Emergency Defensive Reaction
-
-Reserved for implementation example:
-
-``` text
-Input:
-TODO
-
-Rule:
-TODO
-
-Output:
-INTERCEPT / BLOCK
-```
 
 ------------------------------------------------------------------------
 
