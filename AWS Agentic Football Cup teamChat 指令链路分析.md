@@ -10,7 +10,7 @@ AWS Agentic Football Cup 是基于 Amazon Bedrock、Bedrock AgentCore 以及 Str
 教练可在底部输入框编辑战术指令，并通过 `Shout!` 按钮实时下发。
 该指令会随比赛状态一起传递至后端 `gameState.teamChat` 字段，由 Agent 服务接收。
 
-![Coach Instruction](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/coach_instruction.png)
+![Coach Instruction](images/coach_instruction.png)
 
 在观赛过程中，参赛者会通过 Portal 输入：
 
@@ -203,7 +203,7 @@ Coach Tactical Instruction
 ```
 
 ---
-![summarize_state Context Builder](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/summarize_state.png)
+![summarize_state Context Builder](images/summarize_state.png)
 
 该代码片段展示当前 Context Builder 的字段映射逻辑：
 ball、score、gameTime、playMode、players 均被提取，
@@ -392,7 +392,7 @@ if coach_instruction:
     )
     lines.append(coach_instruction)
 ```
-![Context Injection Fix](https://github.com/Echolyy-dreamer/BedrockAgentCore/raw/main/Adding.png)
+![Context Injection Fix](images/Adding.png)
 
 > 该方案保持原有 Agent 输入结构不变，仅扩展 Context Builder 输出内容。
 修复后数据流：
