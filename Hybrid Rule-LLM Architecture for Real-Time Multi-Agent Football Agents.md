@@ -2,7 +2,7 @@
 
 Lessons from AWS Agentic Football Cup
 
-## Introduction
+# Introduction
 
 **AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents. During the AWS Agentic Football Cup workshop, many teams focused on improving agent performance through prompt engineering: refining instructions, adjusting roles, and tuning LLM responses.
 
@@ -247,24 +247,30 @@ MOVE_TO_POSITION
 
 # 6. Benefits
 
-## Real-Time Responsiveness
+### Real-Time Responsiveness
 
 Fast Decision Layer enables immediate responses for deterministic,
 time-critical scenarios without waiting for LLM inference.
 
-## Decision Quality
+### Decision Quality
 
 Deterministic rules handle high-confidence situations, while LLM reasoning
 is reserved for tactical decisions requiring contextual evaluation.
 
-## Execution Reliability
+### Execution Reliability
 
 Validation Control Layer ensures generated commands satisfy game environment and role constraints before execution.
 
-## Resource Efficiency
+### Resource Efficiency
 
 Reducing unnecessary LLM calls lowers token consumption and inference cost.
 
+# 7.Conclusion
 
+Improving multi-agent systems requires exploring multiple dimensions. Different optimization approaches address different challenges, from reasoning quality to decision efficiency and execution reliability.
+
+In real-time environments, not every decision requires the same level of intelligence. Some situations benefit from fast and deterministic responses, while others require contextual reasoning from LLMs.
+
+The AWS Agentic Football Cup provides a practical environment for exploring these trade-offs. Rethinking the decision pipeline itself can reveal new opportunities for building more efficient and reliable multi-agent systems.
 
 
