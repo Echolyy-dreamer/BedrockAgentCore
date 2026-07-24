@@ -1,36 +1,85 @@
 # Beyond Prompt Engineering: Hybrid Rule-LLM Architecture for Real-Time Multi-Agent Decision Making
 
-Lessons from AWS Agentic Football Cup
-
 # Introduction
 
-**AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents. During the AWS Agentic Football Cup workshop, many teams focused on improving agent performance through prompt engineering: refining instructions, adjusting roles, and tuning LLM responses.
+**AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents. During the AWS Agentic Football Cup workshop, teams actively iterated on their agents, experimenting with prompt adjustments and observing how different instructions influenced agent behavior.
 
-While prompt optimization improves reasoning quality, it does not address all challenges in real-time agent systems. Decision latency, unnecessary reasoning, and invalid actions are often caused by the decision architecture itself rather than the prompt.
-
-This article explores an alternative optimization direction: improving the agent decision pipeline through a hybrid architecture that combines deterministic rules, LLM reasoning, and validation control.
-
-> **Rules handle certainty. LLMs handle uncertainty. Validation ensures reliability.**
-
+While prompt optimization improves agent behavior, it does not address all challenges in real-time agent systems. Decision latency, unnecessary reasoning, and invalid actions are often caused by the decision architecture itself rather than the prompt.
 
 In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). LLM inference is the primary decision mechanism for every decision cycle. 
 
 The current decision pipeline can be summarized as:
 
 ```mermaid
-flowchart TB
-    classDef box fill:#f3f0ff,stroke:#9988cc
+flowchart LR
 
-    STATE["Game Environment State<br/>GameState Payload"]:::box
-    AGENT["Individual Player Agent<br/>One Agent per Player"]:::box
-    LLM["LLM Reasoning Layer<br/>Decision Making Every Tick"]:::box
-    CMD["Player Command<br/>MOVE / PASS / SHOOT / etc."]:::box
-    ENGINE["Game Engine Execution"]:::box
+    classDef env fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px
+    classDef agent fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px
+    classDef llm fill:#fff4e5,stroke:#f59e0b,stroke-width:3px
+    classDef action fill:#f0fdf4,stroke:#22c55e,stroke-width:2px
+    classDef issue fill:#ffecec,stroke:#ef4444,stroke-width:2px
 
-    STATE --> AGENT
-    AGENT --> LLM
-    LLM --> CMD
-    CMD --> ENGINE
+
+    ENV["<b>Game Environment</b><br/>GameState Payload"]:::env
+
+
+    subgraph Decision["Independent Agent Decision Loops<br/>(Every 2s Tick)"]
+        direction TB
+
+        subgraph P1["Player Agent 1"]
+            A1["Agent State"]:::agent
+            L1["LLM Decision Layer<br/>Reasoning"]:::llm
+            C1["Action Example<br/><b>MOVE_TO</b>"]:::action
+
+            A1 --> L1 --> C1
+        end
+
+
+        subgraph P2["Player Agent 2"]
+            A2["Agent State"]:::agent
+            L2["LLM Decision Layer<br/>Reasoning"]:::llm
+            C2["Action Example<br/><b>PASS</b>"]:::action
+
+            A2 --> L2 --> C2
+        end
+
+
+        subgraph PN["Player Agent N"]
+            AN["Agent State"]:::agent
+            LN["LLM Decision Layer<br/>Reasoning"]:::llm
+            CN["Action Example<br/><b>MARK</b>"]:::action
+
+            AN --> LN --> CN
+        end
+
+    end
+
+
+    ENGINE["<b>Game Engine</b><br/>Execution"]:::env
+
+
+    ENV --> A1
+    ENV --> A2
+    ENV --> AN
+
+
+    C1 --> ENGINE
+    C2 --> ENGINE
+    CN --> ENGINE
+
+
+
+    subgraph Challenges["Architectural Challenges"]
+        direction TB
+
+        I1["LLM inference<br/>for every decision"]:::issue
+        I2["Unnecessary reasoning<br/>in deterministic scenarios"]:::issue
+        I3["Generated actions<br/>require validation"]:::issue
+
+    end
+
+
+    Decision -.-> Challenges
 ```
 
 Each agent receives the current game state, performs LLM reasoning, and returns an action command (one of MOVE_TO, PASS, SHOOT, SLIDE_TACKLE, GK_DISTRIBUTE ...) controlling the corresponding player.
@@ -42,38 +91,88 @@ This architecture enables flexible tactical reasoning, but it also introduces se
 - Deterministic situations consume unnecessary reasoning resources.
 - LLM-generated actions may require additional validation before execution.
 
-This motivates a hybrid architecture that combines deterministic rules, LLM reasoning, and validation control.
+This article explores an architectural optimization approach: improving the agent decision pipeline through a hybrid architecture that combines deterministic rules, selective LLM reasoning, and validation control.
+
+The design principle behind this architecture is:
+
+> **Rules handle certainty. LLMs handle uncertainty. Validation ensures reliability.**
 
 ---
 
 # 1. Proposed Hybrid Architecture
 
-The proposed architecture separates decision responsibilities into three layers:
+The proposed architecture introduces a hybrid decision pipeline with three core layers: a Fast Decision Layer for deterministic scenarios, an LLM Reasoning Layer for ambiguous tactical decisions, and a Command Validation Layer for ensuring command reliability.
+
+A decision router selects the appropriate path based on the uncertainty of each decision scenario.
+
 
 ```mermaid
-%%{init: { 'flowchart': { 'nodeSpacing': 40, 'rankSpacing': 50 }, 'theme':'base' }}%%
+%%{init: { 
+    "flowchart": {
+        "nodeSpacing": 50,
+        "rankSpacing": 60
+    }
+}}%%
+
 flowchart TB
-    classDef box fill:#f3f0ff,stroke:#9988cc,color:#222,stroke-width:1px
-    STATE["Game Environment State"]:::box --> ROUTER["Decision Router<br/>Classify Decision Type"]:::box
-    
-    ROUTER -->|High-confidence scenario| FAST["Fast Decision Layer<br/>Deterministic Rules<br/><br/>• Shooting Window<br/>• Emergency Interception"]:::box
-    ROUTER -->|Ambiguous tactical scenario| LLM["LLM Reasoning Layer<br/>Tactical Decisions<br/><br/>• Press / Retreat<br/>• Pass / Carry"]:::box
 
-    FAST & LLM --> VALIDATION["Validation Control Layer<br/>Physical & Rule Constraints"]:::box
-    VALIDATION --> CMD["Validated Player Command"]:::box
-    CMD --> ENGINE["Game Engine Execution"]:::box
+    classDef env fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px,color:#1e3a8a
+    classDef router fill:#fff4e5,stroke:#f59e0b,stroke-width:3px,color:#78350f
+    classDef rule fill:#ecfdf5,stroke:#22c55e,stroke-width:2px,color:#14532d
+    classDef llm fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px,color:#581c87
+    classDef validation fill:#fff7ed,stroke:#f97316,stroke-width:2px,color:#9a3412
+    classDef command fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
+
+
+    STATE["<b>Game Environment State</b><br/>Position • Ball • Players • Context"]:::env
+
+
+    ROUTER["<b>Decision Router</b><br/>Reasoning Requirement Analysis<br/><br/>Certainty vs. Uncertainty"]:::router
+
+
+    RULES["<b>Rule-Based Fast Path</b><br/>Deterministic Decisions<br/><br/>
+    ✓ Shooting Window<br/>
+    ✓ Emergency Interception<br/>
+    ✓ Safety Constraints"]:::rule
+
+
+    LLM["<b>LLM-Based Reasoning Path</b><br/>Tactical Decisions<br/><br/>
+    • Press / Retreat<br/>
+    • Pass / Carry<br/>
+    • Position Adjustment"]:::llm
+
+
+    VALIDATION["<b>Command Validation Layer</b><br/>Physical & Rule Constraints<br/><br/>
+    Command Verification"]:::validation
+
+
+    CMD["<b>Validated Player Command</b>"]:::command
+
+
+    ENGINE["<b>Game Engine</b><br/>Execution"]:::env
+
+
+    STATE --> ROUTER
+
+    ROUTER -->|Deterministic Scenario| RULES
+    ROUTER -->|Ambiguous Scenario| LLM
+
+    RULES --> VALIDATION
+    LLM --> VALIDATION
+
+    VALIDATION --> CMD
+    CMD --> ENGINE
 ```
-
 ---
 
 # 2. Decision Routing
 
-The Decision Router classifies each decision cycle and selects the appropriate processing path.
+The Decision Router determines the execution path for each decision cycle based on the characteristics of the current game situation.
 
-| Situation | Processing Path |
-| --- | --- |
-| Deterministic / time-critical | Fast Decision Layer |
-| Tactical / uncertain | LLM Reasoning Layer |
+| Situation | Processing Path | Example |
+| --- | --- | --- |
+| Deterministic / time-critical | Fast Decision Layer | Shooting window, emergency interception |
+| Context-dependent / uncertain | LLM Reasoning Layer | Pressing, passing, positioning adjustment |
 
 ---
 
@@ -117,7 +216,7 @@ The Fast Decision Layer can directly trigger:
 ``` text
 SHOOT
 ```
-![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
+![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_en.jpg)
 
 
 ### Emergency Interception
@@ -204,7 +303,7 @@ flowchart TB
 
 ## Example Scenario: Environment Constraint Validation
 
-![Validation](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
+![Validation](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation_en.jpg)
 
 Observed failure scenario:
 
@@ -237,33 +336,16 @@ Reject command
 Reason: Goalkeeper (id=0) does not possess the ball; PASS cannot be executed.
 ```
 
-Fallback:
-
-``` text
-MOVE_TO_POSITION
-```
-
 >The existing fallback mechanism only handles syntactic failures. Since the command format is valid, the existing fallback mechanism is not triggered.The command proceeds to execution despite violating game-state constraints.
 
-# 6. Benefits
+# 6. Key Architectural Benefits
 
-### Real-Time Responsiveness
-
-Fast Decision Layer enables immediate responses for deterministic,
-time-critical scenarios without waiting for LLM inference.
-
-### Decision Quality
-
-Deterministic rules handle high-confidence situations, while LLM reasoning
-is reserved for tactical decisions requiring contextual evaluation.
-
-### Execution Reliability
-
-Validation Control Layer ensures generated commands satisfy game environment and role constraints before execution.
-
-### Resource Efficiency
-
-Reducing unnecessary LLM calls lowers token consumption and inference cost.
+| Benefit | Contribution |
+| --- | --- |
+| ⚡ Real-Time Responsiveness | Deterministic scenarios bypass LLM inference latency and receive immediate responses. |
+| 🧠 Decision Quality | Rules handle high-confidence situations, while LLM reasoning focuses on contextual tactical decisions. |
+| 🛡 Execution Reliability | Validation ensures generated commands are executable under current game state and role constraints. |
+| 💰 Resource Efficiency | Avoiding unnecessary LLM calls reduces token consumption and inference overhead. |
 
 # 7.Conclusion
 
@@ -271,6 +353,9 @@ Improving multi-agent systems requires exploring multiple dimensions. Different 
 
 In real-time environments, not every decision requires the same level of intelligence. Some situations benefit from fast and deterministic responses, while others require contextual reasoning from LLMs.
 
-The AWS Agentic Football Cup provides a practical environment for exploring these trade-offs. Rethinking the decision pipeline itself can reveal new opportunities for building more efficient and reliable multi-agent systems.
+The AWS Agentic Football Cup provides a practical environment for exploring these trade-offs. Rethinking the decision pipeline itself can reveal new opportunities for building more efficient and reliable multi-agent systems. 
+
+Keep exploring, keep experimenting, and have fun building smarter agents.
+
 
 
