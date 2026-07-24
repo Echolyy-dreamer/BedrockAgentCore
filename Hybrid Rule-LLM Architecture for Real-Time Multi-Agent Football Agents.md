@@ -1,10 +1,10 @@
-# Beyond Prompt Engineering: Hybrid Rule-LLM Architecture for Real-Time Multi-Agent Decision Making
+# Beyond Prompt Engineering: Architecting a Hybrid Rule-LLM Decision System for AWS Agentic Football Cup
 
 # Introduction
 
 **AWS Agentic Football Cup** is a real-time multi-agent football simulation environment built around autonomous player agents. During the AWS Agentic Football Cup workshop, teams actively iterated on their agents, experimenting with prompt adjustments and observing how different instructions influenced agent behavior.
 
-While prompt optimization improves agent behavior, it does not address all challenges in real-time agent systems. Decision latency, unnecessary reasoning, and invalid actions are often caused by the decision architecture itself rather than the prompt.
+While prompt optimization improves agent behavior, another optimization perspective is the decision pipeline itself. In real-time multi-agent systems, how decisions are routed and executed can significantly influence latency, reasoning efficiency, and action reliability.
 
 In the current architecture, each player agent independently invokes an LLM-based decision process at a fixed interval (every 2 seconds). LLM inference is the primary decision mechanism for every decision cycle. 
 
@@ -167,12 +167,16 @@ flowchart TB
 
 # 2. Decision Routing
 
-The Decision Router determines the execution path for each decision cycle based on the characteristics of the current game situation.
+The Decision Router evaluates the current game situation against predefined deterministic conditions. When a situation matches a known rule pattern, the corresponding fast decision path is executed directly. Otherwise, the decision is delegated to the LLM reasoning layer for further tactical analysis.
+
+![Routing](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/routing_en.jpg)
+
+The routing criteria can be summarized as follows:
 
 | Situation | Processing Path | Example |
 | --- | --- | --- |
-| Deterministic / time-critical | Fast Decision Layer | Shooting window, emergency interception |
-| Context-dependent / uncertain | LLM Reasoning Layer | Pressing, passing, positioning adjustment |
+| Matches deterministic rule conditions | Fast Decision Layer | Shooting window, emergency interception |
+| No deterministic rule match | LLM Reasoning Layer | Pressing, passing, positioning adjustment |
 
 ---
 
@@ -283,22 +287,51 @@ It enforces deterministic constraints such as:
 
 Pipeline:
 ```mermaid
-%%{init: { 'flowchart': { 'nodeSpacing': 40, 'rankSpacing': 50 }, 'theme':'base' }}%%
+%%{init: { 
+    "flowchart": {
+        "nodeSpacing": 50,
+        "rankSpacing": 60
+    }
+}}%%
+
 flowchart TB
-    classDef box fill:#f3f0ff,stroke:#9988cc,color:#222,stroke-width:1px
-    LLM["LLM Reasoning Layer"]:::box
-    CMD["Generated Command"]:::box
-    PARSER["Command Parser"]:::box
-    VALIDATION["Validation Control Layer<br/>State & Rule Constraints"]:::box
-    EXECUTE["Game Engine Execution"]:::box
-    FALLBACK["Existing Fallback Mechanism"]:::box
+
+    classDef llm fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px,color:#581c87
+    classDef command fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px,color:#1e3a8a
+    classDef validation fill:#fff4e5,stroke:#f59e0b,stroke-width:3px,color:#78350f
+    classDef execute fill:#ecfdf5,stroke:#22c55e,stroke-width:2px,color:#14532d
+    classDef fallback fill:#ffecec,stroke:#ef4444,stroke-width:2px,color:#991b1b
+
+
+    LLM["<b>LLM Reasoning Layer</b><br/>Generate Action Intent"]:::llm
+
+    CMD["<b>Generated Command</b><br/>SHOOT / PASS / MOVE / ..."]:::command
+
+    PARSER["<b>Command Parser</b><br/>Format & Schema Check"]:::command
+
+
+    VALIDATION["<b>Validation Control Layer</b><br/><br/>
+    Semantic Validation<br/>
+    • Possession Check<br/>
+    • Role Constraints<br/>
+    • Action Feasibility<br/>
+    • State Consistency"]:::validation
+
+
+    EXECUTE["<b>Game Engine</b><br/>Execute Valid Command"]:::execute
+
+
+    FALLBACK["<b>Fallback Handling</b><br/>Reject / Replace / Safe Action"]:::fallback
+
 
     LLM --> CMD
     CMD --> PARSER
-    PARSER -->|Parse Failure| FALLBACK
-    PARSER -->|Valid Command| VALIDATION
+
+    PARSER -->|Valid Format| VALIDATION
+    PARSER -->|Parse Error| FALLBACK
+
     VALIDATION -->|Valid State| EXECUTE
-    VALIDATION -->|Invalid State| FALLBACK
+    VALIDATION -->|Invalid Action| FALLBACK
 ```
 
 ## Example Scenario: Environment Constraint Validation
