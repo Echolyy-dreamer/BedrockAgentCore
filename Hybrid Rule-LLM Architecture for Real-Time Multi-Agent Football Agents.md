@@ -101,7 +101,7 @@ The design principle behind this architecture is:
 
 # 1. Proposed Hybrid Architecture
 
-The proposed architecture introduces a hybrid decision pipeline with three core layers: a Fast Decision Layer for deterministic scenarios, an LLM Reasoning Layer for ambiguous tactical decisions, and a Command Validation Layer for ensuring command reliability.
+The proposed architecture introduces a hybrid decision pipeline with three core layers: a Fast Decision Layer for deterministic scenarios, an LLM Reasoning Layer for ambiguous tactical decisions, and a Validation Layer for ensuring command reliability.
 
 A decision router selects the appropriate path based on the uncertainty of each decision scenario.
 
@@ -289,9 +289,9 @@ The proposed Validation Control Layer adds semantic and environment-level valida
 
 It enforces deterministic constraints such as:
 
-- possession requirements;
-- player role constraints;
-- action feasibility;
+- possession requirements.
+- player role constraints.
+- action feasibility.
 - game state consistency.
 
 Pipeline:
@@ -378,7 +378,7 @@ Reject command
 Reason: Goalkeeper (id=0) does not possess the ball; PASS cannot be executed.
 ```
 
->The existing fallback mechanism only handles syntactic failures. Since the command format is valid, the existing fallback mechanism is not triggered.The command proceeds to execution despite violating game-state constraints.
+> The existing fallback mechanism only handles syntactic failures. Since the command format is valid, the existing fallback mechanism is not triggered. The command proceeds to execution despite violating game-state constraints.
 
 # 6. Key Architectural Benefits
 
