@@ -182,46 +182,58 @@ The routing criteria can be summarized as follows:
 
 # 3. Fast Decision Layer
 
+The Fast Decision Layer avoids unnecessary LLM reasoning in deterministic scenarios and eliminates generation uncertainty when the optimal action can already be derived from explicit game-state constraints.
 
-The Fast Decision Layer prevents deterministic situations from being affected by probabilistic LLM outputs.
-**When the optimal action is already known, reasoning is unnecessary.**
+The layer evaluates structured game variables such as possession state, player positions, distances, angles, and role constraints. When predefined conditions are satisfied, the corresponding action command is generated directly.
+
+Only scenarios requiring tactical interpretation remain delegated to the LLM Reasoning Layer.
 
 ## Example Scenarios
 
 ### Clear Shooting Opportunity
+
+![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_en.jpg)
 
 Situation:
 
 ``` text
 Player has possession   +   Clear shooting angle   +   Suitable shooting distance
 ```
+```mermaid
+flowchart LR
 
-Instead of:
+    classDef condition fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px,color:#1e3a8a
+    classDef llm fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px,color:#581c87
+    classDef rule fill:#ecfdf5,stroke:#22c55e,stroke-width:2px,color:#14532d
+    classDef action fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
 
-``` text
-Game State
+    STATE["<b>Shooting Opportunity</b><br/><br/>
+    Has possession<br/>
+    Clear angle<br/>
+    Suitable distance"]:::condition
 
-    |
 
-    v
+    LLM["<b>LLM Reasoning</b><br/><br/>
+    Possible Decisions"]:::llm
 
-LLM Reasoning
 
-    |
+    OUTPUT["SHOOT<br/>PASS<br/>MOVE_TO"]:::llm
 
-    v
 
-Possible Decisions:
-SHOOT / PASS / MOVE TO ...
+    RULE["<b>Fast Decision Rule</b><br/><br/>
+    Condition Match"]:::rule
+
+
+    ACTION["<b>Direct Action</b><br/><br/>
+    SHOOT"]:::action
+
+
+    STATE --> LLM
+    LLM --> OUTPUT
+
+    STATE --> RULE
+    RULE --> ACTION
 ```
-
-The Fast Decision Layer can directly trigger:
-
-``` text
-SHOOT
-```
-![Shoot](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_en.jpg)
-
 
 ### Emergency Interception
 
@@ -237,16 +249,13 @@ The Fast Decision Layer can immediately execute:
 INTERCEPT
 ```
 
-without waiting for LLM reasoning.
-
 ---
 
 # 4. LLM Reasoning Layer
 
 ## Purpose
 
-The LLM handles decisions requiring interpretation and tactical
-reasoning.
+While the Fast Decision Layer handles high-confidence deterministic scenarios, the LLM Reasoning Layer handles situations requiring interpretation and tactical reasoning.
 
 Examples:
 
@@ -260,9 +269,9 @@ How should I respond to coach instructions?
 
 The LLM provides:
 
--   Tactical reasoning.
--   Strategic decisions.
--   Adaptive behavior.
+- Tactical interpretation.
+- Context-aware decisions.
+- Adaptive responses.
 
 ---
 
@@ -380,7 +389,7 @@ Reason: Goalkeeper (id=0) does not possess the ball; PASS cannot be executed.
 | 🛡 Execution Reliability | Validation ensures generated commands are executable under current game state and role constraints. |
 | 💰 Resource Efficiency | Avoiding unnecessary LLM calls reduces token consumption and inference overhead. |
 
-# 7.Conclusion
+# 7. Conclusion
 
 Improving multi-agent systems requires exploring multiple dimensions. Different optimization approaches address different challenges, from reasoning quality to decision efficiency and execution reliability.
 
