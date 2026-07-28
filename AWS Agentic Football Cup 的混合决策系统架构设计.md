@@ -47,129 +47,60 @@
 
 ![ProposedArchitecture](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/ProposedArchtiect_CN.png)
 
-------------------------------------------------------------------------
+---
 
 # 2. 决策路由逻辑
 
-决策路由器将实时对局状态与预设确定性条件做匹配：一旦命中固定规则模式，直接走快速决策链路；无法通过规则判定的复杂战术场景，则转交 LLM 做深度分析。
+决策路由器将实时对局状态与预设确定性条件做匹配：一旦命中固定规则模式，直接走快速决策链路；无法通过规则判定的场景，则转交 LLM 做深度分析。
 路由判定标准对照表：
 
-如果状态匹配已知规则：
+![Routing](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/routing_en.jpg)
 
-    Game State
-        |
-        v
-    Deterministic Rule Match
-        |
-        v
-    Fast Decision Layer
-
-否则：
-
-    Game State
-        |
-        v
-    LLM Reasoning Layer
 
 路由逻辑：
 
-  -----------------------------------------------------------------------
-  Situation               Processing Path         Example
-  ----------------------- ----------------------- -----------------------
-  Matches deterministic   Fast Decision Layer     Shooting Window,
-  rule conditions                                 Emergency Interception
+| 场景类型 | 决策路径 | 示例 |
+| --- | --- | --- |
+| 满足确定性规则条件 | 快速决策层 | 绝佳射门机会、门前紧急拦截 |
+| 无法通过规则直接确定 | LLM 推理层 | 逼抢或回撤策略、传球选择、阵型调整 |
 
-  No deterministic rule   LLM Reasoning Layer     Pressing, Passing,
-  match                                           Position Adjustment
-  -----------------------------------------------------------------------
+---
 
-------------------------------------------------------------------------
-
-# 3. Fast Decision Layer
+# 3. 快速决策层 (Fast Decision Layer)
 
 快速决策层的核心价值：在结果唯一确定的场景跳过 LLM 推理，消除大模型输出随机性，同时大幅降低耗时与算力消耗。
 该模块解析结构化比赛变量：持球状态、球员坐标、距离、角度、场上角色限制等进行判断，当规则条件满足后，直接输出固定动作指令。只有需要主观战术解读的复杂局面，才继续交由 LLM 处理。
 
-![FastFLOW](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_CN.png)
+![FastComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
 
-该层根据结构化游戏变量进行判断：
-
--   possession state
--   player positions
--   distances
--   angles
--   role constraints
-
-当规则条件满足时，直接生成对应动作。
-
-## Example Scenario: Clear Shooting Opportunity
-
-条件：
-
-    Player has possession
-    +
-    Clear shooting angle
-    +
-    Suitable shooting distance
-
-传统 LLM-only 流程：
-
-    Game State
-
-        |
-
-        v
-
-    LLM Reasoning
-
-        |
-
-        v
-
-    Probabilistic Decisions
-
-    SHOOT
-    PASS
-    MOVE_TO
-
-LLM 可以生成合理行为，但生成结果仍然具有概率性。
-
-Fast Decision Layer：
-
-    Game State
-
-        |
-
-        v
-
-    Deterministic Rule Evaluation
-
-        |
-
-        v
-
-    SHOOT
-
-当环境条件已经足够明确时，直接执行固定动作。
-
-------------------------------------------------------------------------
 
 典型场景 1：绝佳射门窗口
 
-![FastComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
-触发条件：
+触发条件:
+
+``` text
 球员持球 + 射门角度无封堵 + 距离球门在合理射门区间
+```
+
+![FastFLOW](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_CN.png)
+
+备注：即便通过提示词对行为规则做了约束，也不属于强硬性限制；加之 LLM 本质为概率性输出，模型决策无法稳定选取最优动作，有可能输出不同行为，错失良机。
 
 典型场景 2：紧急回追拦截
 
 触发条件：
+
+``` text
 检测到对方射门动作 + 皮球飞行路线威胁球门 + 本方防守球员可完成拦截
+```
+
 快速决策层直接下发固定指令：INTERCEPT 拦截
-------------------------------------------------------------------------
 
-# 4. LLM Reasoning Layer
+---
 
-LLM Reasoning Layer 保留原有 LLM 决策能力，但职责更加聚焦。
+# 4. LLM推理层
+
+LLM 脱离层保留原有 LLM 决策能力，但职责更加聚焦。
 
 它不再处理所有 Decision Tick，而主要处理：
 
@@ -179,21 +110,19 @@ LLM Reasoning Layer 保留原有 LLM 决策能力，但职责更加聚焦。
 
 例如：
 
-   此刻应该前场逼抢还是全员回撤？
-   选择短传渗透还是继续带球推进？
-   如何根据场外战术指令调整跑位逻辑？
+-   此刻应该前场逼抢还是全员回撤？
+-   选择短传渗透还是继续带球推进？
+-   场外战术指令调整跑位逻辑？
 
 LLM 提供三大能力：战术意图解读、上下文关联决策、动态自适应应对。
 
 规则负责确定性，LLM 负责复杂推理。
 
-------------------------------------------------------------------------
+---
 
 # 5. 指令校验控制层 (Validation Control Layer )
 
-Validation Control Layer 在动作执行前检查生成指令。
-
-在校验层对规则链路或 LLM 链路输出的指令做后置核验。
+指令校验层对规则链路或 LLM 链路输出的指令做后置核验。
 原有系统仅针对指令格式错误、解析失败做兜底，无法判断指令在当前对局环境下是否具备物理可执行性,格式正确 ≠ 动作一定可执行。
 
 新增的校验层叠加语义校验 + 环境状态校验，强制约束如下规则：
@@ -202,106 +131,42 @@ Validation Control Layer 在动作执行前检查生成指令。
 -   动作物理可行性；
 -   对局状态逻辑自洽性。
 
-```mermaid
-%%{init: { 
-    "flowchart": {
-        "nodeSpacing": 50,
-        "rankSpacing": 60
-    }
-}}%%
-
-flowchart TB
-
-    classDef llm fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px,color:#581c87
-    classDef command fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px,color:#1e3a8a
-    classDef validation fill:#fff4e5,stroke:#f59e0b,stroke-width:3px,color:#78350f
-    classDef execute fill:#ecfdf5,stroke:#22c55e,stroke-width:2px,color:#14532d
-    classDef fallback fill:#ffecec,stroke:#ef4444,stroke-width:2px,color:#991b1b
+![VlationFlow](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation-CN.png)
 
 
-    LLM["<b>LLM Reasoning Layer</b><br/>Generate Action Intent"]:::llm
-
-    CMD["<b>Generated Command</b><br/>SHOOT / PASS / MOVE / ..."]:::command
-
-    PARSER["<b>Command Parser</b><br/>Format & Schema Check"]:::command
-
-
-    VALIDATION["<b>Validation Control Layer</b><br/><br/>
-    Semantic Validation<br/>
-    • Possession Check<br/>
-    • Role Constraints<br/>
-    • Action Feasibility<br/>
-    • State Consistency"]:::validation
-
-
-    EXECUTE["<b>Game Engine</b><br/>Execute Valid Command"]:::execute
-
-
-    FALLBACK["<b>Fallback Handling</b><br/>Reject / Replace / Safe Action"]:::fallback
-
-
-    LLM --> CMD
-    CMD --> PARSER
-
-    PARSER -->|Valid Format| VALIDATION
-    PARSER -->|Parse Error| FALLBACK
-
-    VALIDATION -->|Valid State| EXECUTE
-    VALIDATION -->|Invalid Action| FALLBACK
-
-```
-
-
-## 真实失效案例：环境约束校验落地
+## 真实失效案例：环境约束校验
 
 ![VlationComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
-观测到的：门将智能体在未持球状态下，LLM 仍然生成了传球指令。
+观测到的失误：门将智能体在未持球状态下，LLM 仍然生成了传球指令。
+
+观测的日志：
+![Validation_Layer](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation_layer_example.png)
 
 原始对局状态摘要：
-
-
-## Example Scenario
-
-某 Goalkeeper Agent 生成：
+``` text
+YOUR PLAYER (GK, id=0): pos=(-5.5,0.0) distBall=4.6 hasBall=False
+Ball: (-0.9,0.1) held by MY player 4
+```
+LLM 输出的指令:
 
 ``` json
-[
- {
-  "commandType":"PASS",
-  "target_player_id":4
- }
-]
+[{"commandType":"PASS","target_player_id":4,"type":"GROUND"}]
 ```
 
-但是当前状态：
+校验层判定规则：
+传球、射门动作前置条件：执行球员必须持有球权（hasBall=True）
 
-    YOUR PLAYER (GK, id=0)
+校验驳回结果：
+``` text
+指令驳回
+原因：ID为0的门将未持有皮球，无法执行传球动作
+```
 
-    hasBall=False
+> 原有兜底机制仅拦截语法错误指令，本条 JSON 格式完全合规，会直接进入执行环节造成逻辑异常。新增语义校验层可彻底规避此类问题。
 
-    Ball held by MY player 4
+---
 
-虽然：
-
--   JSON 格式正确；
--   Command Schema 正确；
-
-但：
-
--   GK 当前没有球权；
--   PASS 动作不可执行。
-
-Validation Layer：
-
-    Reject Command
-
-    Reason:
-    Player does not possess the ball.
-    PASS cannot be executed.
-
-------------------------------------------------------------------------
-
-# 六、架构核心收益汇总
+# 6、架构核心收益汇总
 
 | 收益 | 贡献 |
 | --- | --- |
@@ -309,17 +174,17 @@ Validation Layer：
 | 🧠 决策质量提升 | Rules 处理确定性场景，LLM 处理战术不确定性 |
 | 🛡 执行稳定性 | Validation 确保动作符合当前环境约束 |
 | 💰 资源成本优化 | 减少不必要的 LLM 调用，降低推理开销 |
-------------------------------------------------------------------------
+---
 
-# 七. 总结
+# 7. 总结
 
-多智能体系统的性能优化可以从多个维度展开：既可以提升模型推理质量，也可以重新设计决策执行链路，从而改善决策效率、行为可靠性与系统响应能力。
+多智能体系统的性能优化可以从多个维度展开：既可以提升模型推理与决策质量，也可以重新设计智能体的决策执行链路，从而改善系统效率、行为可靠性与实时响应能力。
 
-在强实时运行环境中，并非所有决策都需要经过完整的 LLM 推理流程。对于确定、简单、时间敏感的场景，可以通过确定性规则快速响应；而对于复杂、动态、需要上下文理解与战术判断的场景，则交由 LLM 发挥推理能力。
+在强实时运行环境中，并非所有决策都需要经过完整的 LLM 推理流程。对于确定、简单且时间敏感的场景，可以通过确定性规则快速响应；而对于复杂、动态、需要上下文理解与战术判断的场景，则交由 LLM 发挥推理优势。
 
-AWS Agentic Football Cup 提供了一个探索智能体架构设计与决策优化权衡的实践环境。通过重新思考 Agent 的决策流程，可以进一步构建更加高效、可靠和智能的多智能体系统。
+AWS Agentic Football Cup 提供了一个探索智能体架构设计与决策优化权衡的实践环境。通过重新审视 Agent 的决策流程，可以进一步构建更加高效、可靠的多智能体系统。
 
-持续探索，持续迭代，让智能体系统不断进化。
+持续探索，持续迭代，让智能体系统持续演进。
 
 
 
