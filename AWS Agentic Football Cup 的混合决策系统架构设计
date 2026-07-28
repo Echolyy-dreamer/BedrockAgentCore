@@ -1,0 +1,291 @@
+# AWS Agentic Football Cup 的 Rule-LLM 混合决策系统架构设计
+
+# 背景介绍
+
+**AWS Agentic Football Cup** 是一个基于自主智能体（Autonomous Agent）的实时多智能体足球仿真环境。
+
+在 AWS Agentic Football Cup Workshop 中，各团队通过 Prompt调整、上下文优化以及行为观察不断提升 Agent 表现。
+
+除了 Prompt Engineering 之外，还可以通过优化Agent短期状态记忆，引入工具等方式来优化系统的性能，本文探索另一个重要优化方向-重新思考 Agent的决策流水线（Decision Pipeline）。
+
+在实时多智能体系统中，决策如何产生、如何路由以及如何执行，会直接影响：
+
+-   决策延迟（Latency）
+-   推理效率（Reasoning Efficiency）
+-   行为可靠性（Action Reliability）
+
+当前架构中，每个 Player Agent 在固定周期（每 2 秒一个 Tick）独立调用 LLM决策流程。
+
+当前流程的问题：
+
+-   每个决策都需要 LLM inference；
+-   时间敏感事件受到模型响应延迟影响；
+-   确定性场景消耗不必要推理资源；
+-   LLM 生成动作可能违反当前环境约束。
+
+本文提出一种 混合决策系统架构设计，通过：
+
+-   Deterministic Rules (确定性的规则)
+-   Selective LLM Reasoning (LLM推理)
+-   Validation Control (校验层)
+
+优化实时 Agent 决策流程。
+
+核心设计原则：
+
+> Rules handle certainty. LLMs handle uncertainty. Validation ensures reliability.
+
+------------------------------------------------------------------------
+
+# 1. Proposed Hybrid Architecture
+
+提出的架构包含三个核心层：
+
+## Fast Decision Layer
+
+负责处理可以由明确游戏状态约束直接确定的高置信度动作。
+
+## LLM Reasoning Layer
+
+负责处理需要上下文理解、战术判断以及动态调整的复杂情况。
+
+## Validation Control Layer
+
+负责检查生成指令是否符合当前游戏状态和执行约束。
+
+Decision Router 根据当前场景的不确定性选择对应路径。
+
+------------------------------------------------------------------------
+
+# 2. Decision Routing
+
+Decision Router 根据当前 Game State 判断是否满足已定义的确定性条件。
+
+如果状态匹配已知规则：
+
+    Game State
+        |
+        v
+    Deterministic Rule Match
+        |
+        v
+    Fast Decision Layer
+
+否则：
+
+    Game State
+        |
+        v
+    LLM Reasoning Layer
+
+路由逻辑：
+
+  -----------------------------------------------------------------------
+  Situation               Processing Path         Example
+  ----------------------- ----------------------- -----------------------
+  Matches deterministic   Fast Decision Layer     Shooting Window,
+  rule conditions                                 Emergency Interception
+
+  No deterministic rule   LLM Reasoning Layer     Pressing, Passing,
+  match                                           Position Adjustment
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# 3. Fast Decision Layer
+
+Fast Decision Layer 用于避免在确定性场景中进行不必要的 LLM 推理。
+
+当最佳动作已经可以通过明确环境约束推导出来时，继续进行概率生成并不会增加决策质量。
+
+该层根据结构化游戏变量进行判断：
+
+-   possession state
+-   player positions
+-   distances
+-   angles
+-   role constraints
+
+当规则条件满足时，直接生成对应动作。
+
+## Example Scenario: Clear Shooting Opportunity
+
+条件：
+
+    Player has possession
+    +
+    Clear shooting angle
+    +
+    Suitable shooting distance
+
+传统 LLM-only 流程：
+
+    Game State
+
+        |
+
+        v
+
+    LLM Reasoning
+
+        |
+
+        v
+
+    Probabilistic Decisions
+
+    SHOOT
+    PASS
+    MOVE_TO
+
+LLM 可以生成合理行为，但生成结果仍然具有概率性。
+
+Fast Decision Layer：
+
+    Game State
+
+        |
+
+        v
+
+    Deterministic Rule Evaluation
+
+        |
+
+        v
+
+    SHOOT
+
+当环境条件已经足够明确时，直接执行固定动作。
+
+------------------------------------------------------------------------
+
+## Example Scenario: Emergency Interception
+
+条件：
+
+    Opponent shot detected
+    +
+    Ball trajectory threatens goal
+    +
+    Defender can intercept
+
+该场景具有明显时间敏感性。
+
+Fast Decision Layer 可以绕过 LLM 推理周期，立即执行：
+
+    INTERCEPT
+
+------------------------------------------------------------------------
+
+# 4. LLM Reasoning Layer
+
+LLM Reasoning Layer 保留原有 LLM 决策能力，但职责更加聚焦。
+
+它不再处理所有 Decision Tick，而主要处理：
+
+-   高不确定性场景；
+-   需要战术理解的问题；
+-   动态环境下的策略选择。
+
+例如：
+
+    Should I press or retreat?
+
+    Should I pass or carry the ball?
+
+    How should I respond to coach instructions?
+
+LLM 提供：
+
+-   Tactical Interpretation
+-   Context-aware Decisions
+-   Adaptive Responses
+
+规则负责确定性，LLM 负责复杂推理。
+
+------------------------------------------------------------------------
+
+# 5. Validation Control Layer
+
+Validation Control Layer 在动作执行前检查生成指令。
+
+现有系统通常已经具备：
+
+-   Command Parsing
+-   Format Validation
+
+但是：
+
+格式正确 ≠ 动作一定可执行。
+
+因此需要增加环境级验证：
+
+-   Possession Check
+-   Player Role Constraints
+-   Action Feasibility
+-   Game State Consistency
+
+## Example Scenario
+
+某 Goalkeeper Agent 生成：
+
+``` json
+[
+ {
+  "commandType":"PASS",
+  "target_player_id":4
+ }
+]
+```
+
+但是当前状态：
+
+    YOUR PLAYER (GK, id=0)
+
+    hasBall=False
+
+    Ball held by MY player 4
+
+虽然：
+
+-   JSON 格式正确；
+-   Command Schema 正确；
+
+但：
+
+-   GK 当前没有球权；
+-   PASS 动作不可执行。
+
+Validation Layer：
+
+    Reject Command
+
+    Reason:
+    Player does not possess the ball.
+    PASS cannot be executed.
+
+------------------------------------------------------------------------
+
+# 6. Key Architectural Benefits
+
+  Benefit                    Contribution
+  -------------------------- ----------------------------------------
+  Real-Time Responsiveness   确定性场景绕过 LLM latency
+  Decision Quality           Rules 处理确定性，LLM 处理战术不确定性
+  Execution Reliability      Validation 保证动作符合环境约束
+  Resource Efficiency        减少无必要 LLM 调用
+
+------------------------------------------------------------------------
+
+# 7. Conclusion
+
+实时多智能体系统并不意味着每一个动作都需要同等级别的智能推理。
+
+一些场景可以通过确定性规则快速解决，而另一些复杂场景仍然需要 LLM的上下文理解能力。
+
+通过重新设计决策流水线，可以构建更加高效、可靠的 Hybrid Rule-LLM Agent Architecture。
+
+AWS Agentic Football Cup 提供了一个探索这些架构权衡的实践环境。
+
+
