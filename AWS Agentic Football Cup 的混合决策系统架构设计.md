@@ -2,111 +2,50 @@
 
 # 引言
 
-**AWS Agentic Football Cup** 是一个基于自主智能体（Autonomous Agent）的实时多智能体足球仿真环境。
+燃情的世界杯赛事在球迷们的欢呼与期待中落下帷幕，而北京的 **AWS Agentic Football Cup** 赛事工作坊也同期展开并圆满结束。
 
-在赛事工作坊中，各参赛团队持续迭代优化智能体，通过调整提示词观测指令对智能体行为的影响。
+**AWS Agentic Football Cup** 是一个基于自主智能体（Autonomous Agent）的实时多智能体足球仿真环境，通过模拟足球比赛场景，探索多智能体之间的协作、决策与实时交互能力。
 
-除了提示词优化之外，还可以通过加入智能体短期状态记忆，引入测算工具等方式来优化系统的性能，本文探索另一个重要优化方向-重新思考 Agent的决策流水线（Decision Pipeline）。
+![Workshop](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/workshop.jpg)
+
+在赛事工作坊中，各参赛团队通过 Prompt Engineering、行为观察以及持续迭代优化，不断提升智能体足球队的整体表现。
+
+除了 Prompt 优化之外，引入智能体短期状态记忆、增加外部工具能力等方式，同样可以提升智能体系统的表现。
+
+本文将探索另一个优化方向：跳出单个智能体优化视角，重新思考整个 Agent 决策流水线（Decision Pipeline）。
 
 在实时多智能体系统中，决策如何产生、如何路由以及如何执行，会直接影响：
 
--   决策延迟（Latency）
--   推理效率（Reasoning Efficiency）
--   行为可靠性（Action Reliability）
+- 决策延迟（Latency）
+- 推理效率（Reasoning Efficiency）
+- 行为可靠性（Action Reliability）
 
-当前架构中，每个 Player Agent 在固定周期（每 2 秒一个 Tick）独立调用 LLM决策流程。
-```mermaid
-flowchart LR
+当前架构中，每个 Player Agent 在固定周期（每 2 秒一个 Tick）独立调用 LLM 决策流程。
 
-    classDef env fill:#e8f3ff,stroke:#4a90e2,stroke-width:2px
-    classDef agent fill:#f5f0ff,stroke:#8b5cf6,stroke-width:2px
-    classDef llm fill:#fff4e5,stroke:#f59e0b,stroke-width:3px
-    classDef action fill:#f0fdf4,stroke:#22c55e,stroke-width:2px
-    classDef issue fill:#ffecec,stroke:#ef4444,stroke-width:2px
+![CurrentArchitecture](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/LLM-current-CN.png)
 
+每个智能体接收实时比赛状态，经由大模型推理后输出动作指令（包括移动、传球、射门、滑铲、门将发球等），控制对应场上球员执行。
 
-    ENV["<b>比赛环境</b><br/>比赛状态数据包"]:::env
+这套架构赋予智能体灵活的战术推演能力，但在实时运行场景下也带来了一些架构挑战：
 
+- 每一轮决策都需要经过完整的 LLM 推理流程；
+- 高时效应急动作受到大模型推理延迟影响；
+- 对于结果已经确定的场景，仍然消耗额外推理资源；
+- LLM 生成指令可能违反当前环境约束，需要执行前校验。
 
-    subgraph Decision["独立智能体决策循环<br/>（每2秒时间片触发）"]
-        direction TB
-
-        subgraph P1["1号球员智能体"]
-            A1["智能体自身状态"]:::agent
-            L1["LLM决策层<br/>逻辑推理"]:::llm
-            C1["动作示例<br/><b>移动至指定点</b>"]:::action
-
-            A1 --> L1 --> C1
-        end
-
-
-        subgraph P2["2号球员智能体"]
-            A2["智能体自身状态"]:::agent
-            L2["LLM决策层<br/>逻辑推理"]:::llm
-            C2["动作示例<br/><b>传球</b>"]:::action
-
-            A2 --> L2 --> C2
-        end
-
-
-        subgraph PN["N号球员智能体"]
-            AN["智能体自身状态"]:::agent
-            LN["LLM决策层<br/>逻辑推理"]:::llm
-            CN["动作示例<br/><b>盯人防守</b>"]:::action
-
-            AN --> LN --> CN
-        end
-
-    end
-
-
-    ENGINE["<b>比赛引擎</b><br/>动作执行"]:::env
-
-
-    ENV --> A1
-    ENV --> A2
-    ENV --> AN
-
-
-    C1 --> ENGINE
-    C2 --> ENGINE
-    CN --> ENGINE
-
-
-
-    subgraph Challenges["架构现存痛点"]
-        direction TB
-
-        I1["每一次决策都要调用LLM推理"]:::issue
-        I2["确定场景下产生无效冗余推理"]:::issue
-        I3["LLM输出动作需额外校验才可执行"]:::issue
-
-    end
-
-
-    Decision -.-> Challenges
-```
-
-每一个智能体接收实时比赛状态，经由大模型推理后输出动作指令（包括移动、传球、射门、滑铲、门将发球等），控制对应场上球员执行。
-这套架构赋予了智能体灵活的战术推演能力，但在实时运行场景下衍生出诸多问题：
--   每一轮决策都必须走完 LLM 完整推理链路；
--   高时效应急动作高度依赖大模型推理延迟；
--   结果完全确定的场景仍消耗大量推理算力；
--   LLM 生成指令存在不合规风险，执行前需要二次校验。
-
-本文提出一套架构优化方案：通过确定性规则 + 选择性 LLM 推理 + 指令校验的混合流水线重构智能体决策链路。
-核心设计理念：
+本文提出一种架构优化方案：通过**确定性规则（Deterministic Rules）+ 选择性 LLM 推理（Selective LLM Reasoning）+ 指令校验（Validation Control）**构建混合决策流水线，重新设计智能体的决策流程。
 
 核心设计原则：
 
-> 确定场景交由规则处理，模糊场景交由大模型推理，校验机制保障执行可靠性。
-
+> 确定性场景交由规则处理，复杂场景交由大模型推理，校验机制保障动作可靠执行。
 ------------------------------------------------------------------------
 
 # 1. 架构提案
 
 整体架构拆解为三层核心模块：快速决策层处理确定性场景、LLM 推理层处理模糊战术判断、指令校验层保证指令合法可用。
 由一个决策路由器根据当前场景不确定性，自动分流至对应处理链路。
+
+![ProposedArchitecture](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/ProposedArchtiect_CN.png)
 
 ------------------------------------------------------------------------
 
@@ -151,7 +90,7 @@ flowchart LR
 快速决策层的核心价值：在结果唯一确定的场景跳过 LLM 推理，消除大模型输出随机性，同时大幅降低耗时与算力消耗。
 该模块解析结构化比赛变量：持球状态、球员坐标、距离、角度、场上角色限制等进行判断，当规则条件满足后，直接输出固定动作指令。只有需要主观战术解读的复杂局面，才继续交由 LLM 处理。
 
-
+![FastFLOW](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fast_CN.png)
 
 该层根据结构化游戏变量进行判断：
 
@@ -216,6 +155,8 @@ Fast Decision Layer：
 ------------------------------------------------------------------------
 
 典型场景 1：绝佳射门窗口
+
+![FastComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/fastdecision.jpg)
 触发条件：
 球员持球 + 射门角度无封堵 + 距离球门在合理射门区间
 
@@ -312,6 +253,8 @@ flowchart TB
 
 
 ## 真实失效案例：环境约束校验落地
+
+![VlationComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
 观测到的：门将智能体在未持球状态下，LLM 仍然生成了传球指令。
 
 原始对局状态摘要：
