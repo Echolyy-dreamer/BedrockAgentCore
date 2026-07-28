@@ -139,7 +139,7 @@ LLM 提供三大能力：战术意图解读、上下文关联决策、动态自�
 ![VlationComic](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation.png)
 观测到的失误：门将智能体在未持球状态下，LLM 仍然生成了传球指令。
 
-观测的日志：
+CloudWatch观测日志：
 ![Validation_Layer](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/validation_layer_example.png)
 
 原始对局状态摘要：
