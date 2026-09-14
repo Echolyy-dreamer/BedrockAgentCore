@@ -553,8 +553,8 @@ Ball: (-0.6, <span class="hlr">0.1</span>) held by MY player 2</div>
   <div class="callout"><b>可观测性正在变成新的基础设施：</b>对越来越复杂的 Multi-Agent 系统而言，<b>Prompt 已经不再是主要调试对象</b>——当五个 agent 共享世界、各自决策、互相影响时，调试对象是"状态在层与层之间如何失真"。分层的日志切面，就是把不可见的失真变成可见的路径。这一框架并不属于足球：换成 AI Customer Service、AI Coding Agent、AI Research Agent、AI Operations Agent，四层结构完全一样。</div>
   <div class="callout warn"><b>修复必须分层，因为问题分层：</b>决策行为审计给出了一条硬结论——无球射门、无球门球分发、出界移动目标主要继承自上层的摘要失真（修 L1/L2 基本消失）；但<b>复读（43% 状态变化无响应、69 次球权易主仍同指令）是 L3 模型自身的独立问题</b>，上游全修对也不会消失。只修系统不修决策，agent 依然会"播幻灯片"——每一层的问题，要在每一层修。</div>
 
-  <h3>同一套框架，你已经在用的三块拼图</h3>
-  <p>如果把视角再拉高一点，这次排查并不是孤立的一次性案例，它与此前解决的问题其实属于同一个更大的体系——<b>Multi-Agent LLM System Engineering</b>。注意下面的分组不再是故障分层，而是四条能力线：</p>
+  <h3>Agent 可观测性调试框架</h3>
+  <p>此次排查并不是孤立的一次性案例，它与此前解决的问题其实属于同一个更大的体系——<b>Multi-Agent LLM System Engineering</b>。可观测性正在变成新的基础设施，分属于四条能力线：</p>
   <div class="pipe">
     <div class="step"><div class="tag">World State Modeling</div><div class="nm">共享世界状态建模</div><div class="ds">possession 归属错误 → 世界层失真，多个 agent 基于同一份错误状态各自行动</div></div>
     <div class="arr">→</div>
