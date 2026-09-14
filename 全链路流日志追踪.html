@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一次 Multi-Agent LLM 系统的可观测性实践</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%233eb05c'/%3E%3Cpath d='M16 6l3 8h8l-6.5 5 2.5 8-7-5-7 5 2.5-8L5 14h8z' fill='%23ffffff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<style>
+  :root{
+    --bg:#0a0f1e; --bg2:#0d1526; --card:#111a2c; --line:#1f2b42;
+    --tx:#d7e0e8; --mut:#8b9bb4; --dim:#5d6d88;
+    --green:#3eb05c; --green2:#5fcf7d; --orange:#ff8d5c; --red:#ff7b72;
+    --purple:#a371f7; --cyan:#3ea4b0; --yellow:#d4a843;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--tx);font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;line-height:1.75;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px}
+  /* ===== Hero ===== */
+  header.hero{padding:72px 0 40px;position:relative;overflow:hidden}
+  header.hero::before{content:'';position:absolute;inset:0;background:
+    radial-gradient(600px 260px at 15% -10%, rgba(62,176,92,.16), transparent 60%),
+    radial-gradient(700px 300px at 90% 0%, rgba(163,113,247,.12), transparent 60%);
+    pointer-events:none}
+  .kicker{font-size:12px;letter-spacing:.22em;color:var(--green2);font-weight:700;text-transform:uppercase;margin-bottom:14px}
+  h1.title{font-family:'Noto Serif SC',serif;font-size:clamp(26px,4.4vw,40px);line-height:1.32;font-weight:800;letter-spacing:.01em}
+  h1.title .hl{color:var(--green2)}
+  h1.title .hl2{color:var(--orange)}
+  .sub{margin-top:16px;color:var(--mut);font-size:15px;max-width:720px}
+  .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mut)}
+  .meta span{padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.02)}
+  .meta b{color:var(--tx);font-weight:600}
+  /* ===== Stats ===== */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:36px 0 8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px}
+  .stat .num{font-family:'Noto Serif SC',serif;font-size:30px;font-weight:800;color:var(--green2);line-height:1.2}
+  .stat .num.red{color:var(--red)} .stat .num.ora{color:var(--orange)} .stat .num.pur{color:var(--purple)}
+  .stat .lbl{font-size:12px;color:var(--mut);margin-top:4px}
+  .stat .d{font-size:11px;color:var(--dim);margin-top:2px}
+  /* ===== Section ===== */
+  section{margin:54px 0}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:18px;border-bottom:1px solid var(--line);padding-bottom:12px}
+  .sec-no{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:800;color:var(--orange);letter-spacing:.06em}
+  h2{font-family:'Noto Serif SC',serif;font-size:22px;font-weight:800;color:#fff}
+  h3{font-family:'Noto Serif SC',serif;font-size:17px;font-weight:700;color:var(--green2);margin:26px 0 10px}
+  p{font-size:14.5px;margin:10px 0}
+  p.lead{font-size:15.5px;color:#c6d2e2}
+  .mut{color:var(--mut)} .dim{color:var(--dim)} b{color:#fff;font-weight:600}
+  /* ===== Pipeline diagram ===== */
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:20px 0}
+  .pipe .step{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;position:relative}
+  .pipe .step .tag{font-size:10.5px;letter-spacing:.14em;font-weight:700;color:var(--cyan)}
+  .pipe .step .nm{font-size:13.5px;font-weight:700;color:#fff;margin-top:4px}
+  .pipe .step .ds{font-size:11.5px;color:var(--mut);margin-top:2px;line-height:1.5}
+  .pipe .step.pin{border-color:rgba(62,176,92,.55);background:linear-gradient(180deg,rgba(62,176,92,.08),var(--card))}
+  .pipe .step.pin .tag{color:var(--green2)}
+  .pipe .arr{flex:0 0 18px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:16px}
+  .pinrow{font-size:11px;color:var(--mut);margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+  .pinrow span{padding:2px 8px;border:1px dashed rgba(62,176,92,.4);border-radius:6px;color:var(--green2);background:rgba(62,176,92,.05)}
+  /* ===== Bug block ===== */
+  .bug{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;margin:20px 0;position:relative}
+  .bug::before{content:'';position:absolute;left:0;top:16px;bottom:16px;width:3px;border-radius:3px}
+  .bug.c1::before{background:var(--red)} .bug.c2::before{background:var(--yellow)}
+  .bug.c3::before{background:var(--purple)} .bug.c4::before{background:var(--cyan)} .bug.c5::before{background:var(--orange)}
+  .bug-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:4px}
+  .bug-id{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:800;color:var(--orange);letter-spacing:.05em}
+  .bug-title{font-size:16.5px;font-weight:800;color:#fff}
+  .bug-where{font-size:11.5px;color:var(--mut);margin-left:auto;white-space:nowrap}
+  .bug-where b{color:var(--cyan)}
+  .tier{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .tier.contract{color:#ff8d5c;background:rgba(255,141,92,.12);border:1px solid rgba(255,141,92,.4)}
+  .tier.glue{color:#3ea4b0;background:rgba(62,164,176,.1);border:1px solid rgba(62,164,176,.4)}
+  .tier.mixed{color:#d4a843;background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.4)}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px;font-size:11.5px}
+  .flow .f{background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.35);color:#c9b3f5;padding:3px 9px;border-radius:6px}
+  .flow .f.g{background:rgba(62,176,92,.08);border-color:rgba(62,176,92,.35);color:var(--green2)}
+  .flow .f.r{background:rgba(255,123,114,.08);border-color:rgba(255,123,114,.35);color:var(--red)}
+  /* ===== Log block ===== */
+  .log{background:#0b1220;border:1px solid #22314e;border-radius:10px;padding:12px 14px;margin:12px 0;font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-size:11.5px;line-height:1.7;color:#9fd8b4;overflow-x:auto;white-space:pre}
+  .log .cm{color:#5d6d88}
+  .log .hl{color:var(--orange);font-weight:700}
+  .log .hlg{color:var(--green2)}
+  .log .hlr{color:var(--red)}
+  .logcap{font-size:11px;color:var(--dim);margin:-6px 0 14px;padding-left:2px}
+  /* ===== Impact ===== */
+  .impact{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+  .imp{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .imp .n{font-family:'Noto Serif SC',serif;font-size:20px;font-weight:800;color:var(--orange)}
+  .imp .t{font-size:11.5px;color:var(--mut);margin-top:2px}
+  /* ===== Charts ===== */
+  .chart{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0}
+  .chart .ch-h{font-size:13.5px;font-weight:700;color:#fff;margin-bottom:2px}
+  .chart .ch-s{font-size:11.5px;color:var(--dim);margin-bottom:8px}
+  .chartbox{width:100%;height:300px}
+  /* ===== Chain ===== */
+  .chain{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin:20px 0}
+  .chain .lay{flex:1 1 190px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .chain .lay .lh{font-size:11px;font-weight:700;letter-spacing:.1em;margin-bottom:6px}
+  .chain .lay .li{font-size:12px;color:#b9c6d8;line-height:1.6;margin:2px 0}
+  .chain .lay .fx{font-size:11px;color:var(--green2);margin-top:8px;padding-top:6px;border-top:1px dashed rgba(62,176,92,.3)}
+  .chain .car{flex:0 0 20px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:15px}
+  .chain .lay.l1 .lh{color:var(--red)} .chain .lay.l2 .lh{color:var(--yellow)}
+  .chain .lay.l3 .lh{color:var(--purple)} .chain .lay.l4 .lh{color:var(--cyan)}
+  /* ===== Timeline ===== */
+  .tl{display:grid;grid-template-columns:92px 26px 1fr;gap:0;margin:18px 0}
+  .tl .t-time{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mut);padding:8px 12px 8px 0;line-height:1.5}
+  .tl .t-dot{position:relative;display:flex;justify-content:center}
+  .tl .t-dot::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--line)}
+  .tl .t-dot i{width:11px;height:11px;border-radius:50%;background:var(--green2);border:3px solid var(--bg);position:relative;z-index:1;margin-top:12px}
+  .tl .t-dot i.r{background:var(--red)} .tl .t-dot i.y{background:var(--yellow)}
+  .tl .t-body{padding:8px 0 8px 14px;font-size:13.5px;color:#c6d2e2}
+  .tl .t-body .t{font-weight:700;color:#fff}
+  /* ===== Table ===== */
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;table-layout:fixed}
+  colgroup col:nth-child(1){width:22%} colgroup col:nth-child(2){width:26%}
+  colgroup col:nth-child(3){width:26%} colgroup col:nth-child(4){width:26%}
+  th{background:rgba(62,176,92,.08);color:var(--green2);text-align:left;padding:9px 10px;border:1px solid var(--line);font-weight:700;font-size:12.5px}
+  td{padding:8px 10px;border:1px solid var(--line);color:#c6d2e2;vertical-align:top}
+  td.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+  /* ===== Callout ===== */
+  .callout{border:1px solid rgba(62,176,92,.35);background:rgba(62,176,92,.05);border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px;color:#c6d2e2}
+  .callout b{color:var(--green2)}
+  .callout.warn{border-color:rgba(212,168,67,.4);background:rgba(212,168,67,.05)}
+  .callout.warn b{color:var(--yellow)}
+  /* ===== Footer ===== */
+  footer{margin:60px 0 40px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+  footer .src{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;margin-top:8px;color:var(--mut)}
+  /* ===== Responsive ===== */
+  @media(max-width:640px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .bug-where{margin-left:0;width:100%;white-space:normal}
+    .chain{flex-direction:column}
+    .chain .car{transform:rotate(90deg);height:20px}
+    .tl{grid-template-columns:78px 22px 1fr}
+    h1.title{font-size:25px}
+    .chartbox{height:260px}
+  }
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+  /* ===== Layer head ===== */
+  .layhead{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:28px 0 8px;background:var(--card);position:relative;border-left-width:4px}
+  .layhead.l1{border-left-color:var(--red)} .layhead.l2{border-left-color:var(--yellow)}
+  .layhead.l3{border-left-color:var(--purple)} .layhead.l4{border-left-color:var(--cyan)}
+  .layhead .lay-no{font-size:11px;font-weight:800;letter-spacing:.2em}
+  .layhead.l1 .lay-no{color:var(--red)} .layhead.l2 .lay-no{color:var(--yellow)}
+  .layhead.l3 .lay-no{color:var(--purple)} .layhead.l4 .lay-no{color:var(--cyan)}
+  .layhead .lay-cn{font-family:'Noto Serif SC',serif;font-size:16.5px;font-weight:800;color:#fff;margin-top:2px}
+  .layhead .lay-desc{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.7}
+  .layhead .lay-badges{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .layhead .lay-badges span{font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:#c6d2e2}
+  .layhead.l1 .lay-badges span{border-color:rgba(255,123,114,.4);color:var(--red)}
+  .layhead.l2 .lay-badges span{border-color:rgba(212,168,67,.4);color:var(--yellow)}
+  .layhead.l3 .lay-badges span{border-color:rgba(163,113,247,.4);color:#c9b3f5}
+  .layhead.l4 .lay-badges span{border-color:rgba(62,164,176,.4);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="kicker">AWS Agentic Football Cup · 一次 Multi-Agent LLM 系统的可观测性实践</div>
+  <h1 class="title">一次 Multi-Agent LLM 系统的<span class="hl">可观测性实践</span><br><span class="hl2">从一场 0:2 的球赛谈起</span></h1>
+  <p class="sub">当一个 Agent 系统行为异常时，最终表现往往只是：输掉比赛、回答错误、执行失败。但真正的问题可能发生在完全不同的层次——世界状态构造、上下文压缩、模型推理、执行转换。本文用一场 0:2 的 Agentic 足球赛说明：<b>四个埋点如何把 Multi-Agent LLM 系统的决策链路切成四段，第一次让"错误发生在哪一层"可以被日志回答</b>。7 个缺陷只是案例，框架才是本文要讲的。</p>
+  <div class="meta">
+    <span>埋点 <b>4</b> 个</span>
+    <span>决策周期 <b>362</b></span>
+    <span>分层 <b>4</b> 层</span>
+    <span>缺陷案例 <b>7</b> 个</span>
+    <span>比分 <b>0 : 2</b>（并非重点）</span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="num red">0:2</div><div class="lbl">终场比分（症状，不是病因）</div><div class="d">失球 8.9s / 115.8s</div></div>
+  <div class="stat"><div class="num ora">4</div><div class="lbl">决策链路层数</div><div class="d">世界 → 上下文 → 推理 → 执行</div></div>
+  <div class="stat"><div class="num">7</div><div class="lbl">缺陷案例</div><div class="d">全部归入 4 层</div></div>
+  <div class="stat"><div class="num pur">362</div><div class="lbl">完整决策周期</div><div class="d">每条指令均可回查</div></div>
+</div>
+
+<section>
+  <div class="sec-head"><span class="sec-no">01</span><h2>当一个 Agent 系统行为异常</h2></div>
+  <p class="lead">Agent 系统的最终表现往往只有三类：<b>输掉比赛、回答错误、执行失败</b>。但这类症状从不告诉你病因在哪——它可能出在完全不同的四层中的任何一层：</p>
+  <div class="pipe">
+    <div class="step"><div class="tag">L1 · 世界状态</div><div class="nm">World State</div><div class="ds">引擎/上游送来的数据本身：字段、坐标、编号、语义是否可被无歧义理解</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="tag">L2 · 上下文</div><div class="nm">Context</div><div class="ds">把世界压缩成模型输入的过程：摘要、提示词、上下文工程</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="tag">L3 · 推理</div><div class="nm">Reasoning</div><div class="ds">模型基于所见输入做出的决策：指令选择、参数、对状态的响应性</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="tag">L4 · 执行</div><div class="nm">Execution</div><div class="ds">把模型输出转换成最终动作的最后一环：解析、校验、落地</div></div>
+  </div>
+  <div class="callout"><b>没有分层埋点时：</b>你只能看到错误结果（0:2 的比分），然后对着结果猜测——是模型不行？是 Prompt 不对？还是引擎有 bug？<b>有了分层埋点后：</b>每一层的输入与输出都被记录，错误在哪一层产生、从哪一层开始失真，第一次可以被日志回答，而不是靠猜。</div>
+  <p>下面这场足球赛是这套方法最完整的样本：5 个位置智能体（GK / DEF / MID / FWD1 / FWD2）各自独立决策，共享同一个游戏世界，最终以 0:2 落败。整场比赛留下了 <b>362 个完整决策周期</b>，四个埋点横跨全部周期——没有比这更适合讲分层可观测性的场景了。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">02</span><h2>四个埋点：把链路切成四段</h2></div>
+  <p class="lead">每个位置智能体都是一条独立决策流水线：<b>读世界 → 压缩世界 → 让模型决策 → 把决策落成指令</b>。四个埋点恰好沿这条链放置，每个埋点对应 L1~L4 中的一层：</p>
+  <div class="pipe">
+    <div class="step pin"><div class="tag">埋点 1 · 入参（L1）</div><div class="nm">原始 game_state</div><div class="ds">引擎发来的完整世界状态（球、10 名球员、比分、模式）——记录"真实世界长什么样"</div></div>
+    <div class="arr">→</div>
+    <div class="step pin"><div class="tag">埋点 2 · 中间态（L2）</div><div class="nm">summarize_state 摘要</div><div class="ds">喂给 LLM 的精简文本——记录"模型看到的世界长什么样"</div></div>
+    <div class="arr">→</div>
+    <div class="step pin"><div class="tag">埋点 3 · 模型输出（L3）</div><div class="nm">LLM 原始指令</div><div class="ds">Nova 模型返回的 JSON——记录"模型想做什么"</div></div>
+    <div class="arr">→</div>
+    <div class="step pin"><div class="tag">埋点 4 · 落地（L4）</div><div class="nm">解析后下发指令</div><div class="ds">parse_commands 处理后的最终命令——记录"系统真正做了什么"</div></div>
+  </div>
+  <div class="pinrow">
+    <span>埋点 1 = 世界层真实输入</span><span>埋点 2 = 上下文层输出</span><span>埋点 3 = 推理层输出</span><span>埋点 4 = 执行层输出</span>
+  </div>
+  <p>四个切面两两对比，就能回答最尖锐的问题：<b>当一场比赛打得不对，是世界错了、摘要错了、模型错了，还是指令落地错了？</b>下文 7 个缺陷案例，全部来自这些切面之间的错位。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">03</span><h2>比赛全景：362 个周期，0:2</h2></div>
+  <p>5 个 agent 的日志以 <span style="font-family:monospace">timestamp, message</span> 两列 CSV 落盘，四个埋点各自打印专属标记。解析脚本按标记切分、按 requestId 对齐，得到 <b>362 个完整决策周期</b>（GK/DEF/MID/FWD1 各 72、FWD2 74），早期 5 个 tick-0 周期因球缺 position 字段被跳过，球坐标统计口径为 357 个周期。看比赛本身，一切"正常得让人无从下手"——除了结果。</p>
+
+  <h3>比赛时间线：两次失球，全部来自 OPEN_PLAY</h3>
+  <div class="tl">
+    <div class="t-time">0.0s</div><div class="t-dot"><i></i></div><div class="t-body"><span class="t">开球</span> · 双方 OPEN_PLAY 对攻，本队控球观察占优（摘要 237 周期标 MY / 125 周期 free）</div>
+    <div class="t-time">8.9s</div><div class="t-dot"><i class="r"></i></div><div class="t-body"><span class="t">第 1 次失球 0:1</span> · 比赛刚过 9 秒，OPEN_PLAY 中被对手攻破</div>
+    <div class="t-time">115.8s</div><div class="t-dot"><i class="r"></i></div><div class="t-body"><span class="t">第 2 次失球 0:2</span> · 第 116 秒再丢一球，全场没有扳回</div>
+    <div class="t-time">119.7s</div><div class="t-dot"><i class="y"></i></div><div class="t-body"><span class="t">终场</span> · 最后一个决策周期 gameTime 119.7s，0:2 落败</div>
+  </div>
+
+  <h3>指令结构：大量动作，极少成效</h3>
+  <p>395 条解析后指令中，<b>MOVE_TO 占 235 条（59%）</b>，真正产生攻击的动作稀少：SHOOT 26 条、PASS 21 条、GK_DISTRIBUTE 13 条。26 次射门 0 进球，21 次地面传球几乎没有向前输送——中后场倒脚占传球的大头。</p>
+  <div class="chart">
+    <div class="ch-h">解析后下发指令构成（395 条）</div>
+    <div class="ch-s">按 commandType 汇总 · 全量 362 周期</div>
+    <div id="ch-cmds" class="chartbox"></div>
+  </div>
+
+  <h3>决策延迟：端到端 P50 ≈ 0.8s，几乎全部耗在 LLM 调用</h3>
+  <p>每个周期的端到端延迟（game_state 到达 → 指令下发）P50 约 <b>798ms</b>，其中 summarize 与 parse 的本地开销 <b>&lt;1ms</b>，其余全部是模型调用。MID 位最慢（P50 1007ms），GK 最快（609ms）——位置之间的 prompt 长度差异直接反映在决策周期上。</p>
+  <div class="chart">
+    <div class="ch-h">各位置 LLM 调用延迟 P50（毫秒）</div>
+    <div class="ch-s">t(LLM 返回) − t(摘要完成) · 362 周期</div>
+    <div id="ch-lat" class="chartbox"></div>
+  </div>
+  <div class="callout warn"><b>为什么先看全景：</b>比赛层面的一切异常（0 进球、26 射 0 中、倒脚）都只是症状。若停在这一层，结论只能是"这队 AI 踢得烂"。真正的病因要沿着四个埋点逐层切开——这正是下一章做的事。</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">04</span><h2>七处失真，四层归属</h2></div>
+  <p class="lead">7 个缺陷分布在四层里，L3 推理层还伴随一组独立的决策行为问题（复读、无球动作、错位指令）。逐层拆解，每一层都用真实日志作证。</p>
+
+  <!-- ============ LAYER 1 ============ -->
+  <div class="layhead l1">
+    <div class="lay-no">LAYER 1</div>
+    <div class="lay-cn">世界状态层 · World Model / Contract Failures</div>
+    <div class="lay-desc">7 个缺陷中有 2 个的根在这里：字段语义、坐标尺度、编号唯一性。错在这一层，Agent 代码读得再对也救不回来。</div>
+    <div class="lay-badges"><span>BUG 1</span><span>BUG 2</span></div>
+  </div>
+
+  <!-- ============ BUG 1 ============ -->
+  <div class="bug c1">
+    <div class="bug-head">
+      <span class="bug-id">BUG 1</span>
+      <span class="bug-title">agentId 两队复用：编号不是全局唯一</span>
+      <span class="tier contract">契约缺陷 · 引擎/API</span>
+      <span class="bug-where">Layer 1 · 发现于 <b>埋点 1 · 原始 game_state</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">agentId 无队伍维度</span>
+      <span class="f r">possessionAgentId 无法判队</span>
+      <span class="f r">target_player_id 无上下文</span>
+    </div>
+    <p><b>发现：</b>第一条原始 game_state 就暴露了结构性问题——<b>主队和客队的球员编号完全一样</b>。home 有 agentId_0~4，away 也有 agentId_0~4。整个比赛中 10 名球员的编号只有 5 个取值，且每个编号对应两名球员。</p>
+    <div class="log">=====【summarize_state 入参 原始game_state】===== <span class="cm">{...}</span>
+"players": [
+  {"teamCode":"home","agentId":"agentId_0","position":{<span class="hlg">"x":-5.96,"y":-0.02</span>}},
+  {"teamCode":"home","agentId":"agentId_1","position":{<span class="hlg">"x":-3.23,"y":0.81</span>}},
+  <span class="cm">... home 0-4 ...</span>
+  {"teamCode":"away","agentId":"agentId_0","position":{<span class="hlg">"x":5.98,"y":0.02</span>}},
+  {"teamCode":"away","agentId":"agentId_1","position":{<span class="hlg">"x":4.07,"y":0.17</span>}},
+  <span class="cm">... away 0-4 ...</span>
+],
+"ball":{<span class="hl">"possessionAgentId":"agentId_2"</span>, ...}</div>
+    <div class="logcap">logs/gk.csv 首周期片段 · "agentId_2" 本身不携带任何队伍信息</div>
+    <p><b>影响：</b>凡是依赖编号定位球员的字段全部带上歧义——球权归属（possessionAgentId）、传球/盯防目标（target_player_id）都只给一个编号，无法判断指的主队还是客队。这是后文 BUG 4、BUG 7 的<b>上游结构性前提</b>：同一套代码在正确读取编号时，也永远无法区分两个同号球员。</p>
+  </div>
+
+  <!-- ============ BUG 2 ============ -->
+  <div class="bug c2">
+    <div class="bug-head">
+      <span class="bug-id">BUG 2</span>
+      <span class="bug-title">场地坐标与文档不符：尺度差 8~10 倍</span>
+      <span class="tier contract">契约缺陷 · 引擎/API</span>
+      <span class="bug-where">Layer 1 · 发现于 <b>埋点 1 · 原始 game_state</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">文档 ±55 / ±35</span>
+      <span class="f r">实际 ±6.4 / ±3.6</span>
+      <span class="f r">47% 移动指令出界</span>
+    </div>
+    <p><b>发现：</b>文档声明 <span style="font-family:monospace">Field coordinates: x ≈ −55 to +55, y ≈ −35 to +35, Team 0 (HOME) attacks toward +x</span>。但把 362 周期所有球员坐标扫一遍，<b>真实场地只有约 ±6.4 × ±3.6</b>——方向没错（HOME 攻 +x、守 −x），尺度却差了 8~10 倍。</p>
+    <div class="chart">
+      <div class="ch-h">文档球场 vs 实际活动范围</div>
+      <div class="ch-s">文档边界 ±55/±35（灰框）· 实际球员坐标（散点，本队绿 / 客队蓝）</div>
+      <div id="ch-field" class="chartbox"></div>
+    </div>
+    <div class="impact">
+      <div class="imp"><div class="n">111</div><div class="t">MOVE_TO 目标出界（占 235 条的 47%）</div></div>
+      <div class="imp"><div class="n">(25,10)</div><div class="t">出现 47 次的出界目标</div></div>
+      <div class="imp"><div class="n">(0,15)</div><div class="t">出现 61 次的出界目标</div></div>
+    </div>
+    <p><b>影响：</b>LLM 在"±55×±35"的世界里规划移动，产出的坐标大量落在真实场地之外。出界指令按 agent 分布为 FWD2 48 / MID 62 / FWD1 1——中前场不断往"不存在的位置"跑，实际站位却挤在自家半场。这份错误的世界模型同样污染了 BUG 3 的距离计算。</p>
+    <div class="log">=====【解析后最终下发指令】===== [{"commandType":"MOVE_TO","playerId":<span class="hl">4</span>,"parameters":{<span class="hl">"target_x":25.0,"target_y":10.0</span>,"sprint":true},"duration":0,"teamId":0}]</div>
+    <div class="logcap">logs/fwd2.csv · 目标 (25, 10) 远超实际场地 ±6.4，却原样下发</div>
+  </div>
+
+  <!-- ============ LAYER 2 ============ -->
+  <div class="layhead l2">
+    <div class="lay-no">LAYER 2</div>
+    <div class="lay-cn">上下文构建层 · Context Construction Failures</div>
+    <div class="lay-desc">世界是对的，但模型看到的是错的——3 个缺陷发生在这里：摘要逻辑、字段取舍、坐标系映射。</div>
+    <div class="lay-badges"><span>BUG 3</span><span>BUG 4</span><span>BUG 5</span></div>
+  </div>
+
+  <!-- ============ BUG 3 ============ -->
+  <div class="bug c3">
+    <div class="bug-head">
+      <span class="bug-id">BUG 3</span>
+      <span class="bug-title">摘要硬编码球门坐标：362/362 周期输出 "Your goal at x=-55"</span>
+      <span class="tier glue">胶水层 Bug · 摘要实现</span>
+      <span class="bug-where">Layer 2 · 发现于 <b>埋点 2 · 摘要文本</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">get_goal_positions 写死 ±55</span>
+      <span class="f r">distOppGoal 放大 ~5 倍</span>
+      <span class="f r">全场比赛一以贯之</span>
+    </div>
+    <p><b>发现：</b>对 362 个周期的摘要做全文扫描，"Your goal at x=<b>-55</b> | Opponent goal at x=<b>55</b>"出现 362 次——<b>没有任何一个周期例外</b>。对照代码，线上版 <span style="font-family:monospace">get_goal_positions()</span> 对 team 0 直接 <span style="font-family:monospace">return -55.0, 55.0</span>，球门坐标是硬编码的文档值，不是从 game_state 读的真实球门。</p>
+    <div class="log">Time: 3s | Score: 0-0 | Team: 0 (HOME) | PlayMode: OPEN_PLAY |
+Ball: (-0.6, 0.1) held by MY player 2 |
+<span class="hl">Your goal at x=-55 | Opponent goal at x=55</span> |
+>>> YOUR PLAYER (FWD2, id=4): pos=(-1.5,0.9) stam=1 distBall=1.1 <span class="hlr">distOppGoal=56.5</span> hasBall=False | ...</div>
+    <div class="logcap">logs/fwd2.csv · 摘要全文 · FWD2 距对手球门 "56.5"，而真实距离只有 ~12</div>
+    <p><b>影响：</b>模型拿到的一切"距离球门"信息都被放大近 5 倍：distOppGoal=56.5（真实约 12）、distToMyGoal 同样失真。这直接误导射门时机判断——26 次射门全部偏出/被扑，0 进球。</p>
+  </div>
+
+  <!-- ============ BUG 4 ============ -->
+  <div class="bug c4">
+    <div class="bug-head">
+      <span class="bug-id">BUG 4</span>
+      <span class="bug-title">持球归属 100% 误标：对手持球被摘要写成 "MY player N"</span>
+      <span class="tier glue">胶水层 Bug · 摘要实现</span>
+      <span class="bug-where">Layer 2 · 发现于 <b>埋点 2 × 埋点 1 交叉验证</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">next() 取同编号第一个球员</span>
+      <span class="f r">players 数组 home 永远在前</span>
+      <span class="f r">摘要恒判本队持球</span>
+    </div>
+    <p><b>发现：</b>把摘要的持球声明（"held by MY player N"）与原始 game_state 交叉验证：用"同编号两名球员中谁离球最近"判定真实持球方。237 个标 MY 的周期里，<b>90 个周期真实持球方是客队</b>——摘要 100% 把对手持球写成了本队持球。</p>
+    <div class="chart">
+      <div class="ch-h">"MY player N" 摘要标签 vs 真实持球方（237 周期）</div>
+      <div class="ch-s">按同编号最近距离判定真实持球方 · 口径见文末</div>
+      <div id="ch-possession" class="chartbox"></div>
+    </div>
+    <div class="log"><span class="cm"># 原始 game_state：球在客队 2 号脚下</span>
+"possessionAgentId":"agentId_2"
+away agentId_2 position: {"x":-0.40,"y":-0.35}   <span class="hlg">← 距离球最近</span>
+home agentId_2 position: {"x":-4.27,"y":-2.21}
+<span class="cm"># 但摘要写的是：</span>
+Ball: (-0.6, 0.1) held by <span class="hlr">MY player 2</span> | ...</div>
+    <div class="logcap">logs/fwd2.csv 第 2 周期 · possessionAgentId=agentId_2，真实持球为客队 2 号，摘要却标 MY player 2</div>
+    <p><b>根因（代码级）：</b>线上版 <span style="font-family:monospace">get_possession_info()</span> 用 <span style="font-family:monospace">next(p for p in players if idx(p)==possession_id)</span> 取持球人。而 game_state 的 players 数组<b>永远是 home 在前、away 在后</b>（见 BUG 1 日志），<span style="font-family:monospace">next()</span> 必然命中主队同编号球员 → <span style="font-family:monospace">_is_my_team()</span> 恒为 True → 摘要恒写 MY。</p>
+    <div class="callout warn"><b>影响：</b>防守端最致命。67 个发出防守指令（PRESS_BALL/MARK/INTERCEPT/FOLLOW_PLAYER）的周期里，摘要标注 MY 41 / free 26 / <b>对手 0</b>——模型从未收到过"对手持球"的信号，逼抢、盯防、拦截全靠"对手坐标贴着球"的位置信息间接触发。GK 甚至会在球权在客队时尝试门球分发。</div>
+  </div>
+
+  <!-- ============ BUG 5 ============ -->
+  <div class="bug c5">
+    <div class="bug-head">
+      <span class="bug-id">BUG 5</span>
+      <span class="bug-title">球坐标轴语义错误：y 是高度，被当成横向</span>
+      <span class="tier contract">契约缺陷 · 引擎/API</span>
+      <span class="bug-where">Layer 2 · 发现于 <b>埋点 2 × 埋点 1 交叉验证</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">球 y ∈ [0.13, 0.93] 恒为高度</span>
+      <span class="f r">球 z ∈ [-3.64, 3.59] 才是横向</span>
+      <span class="f r">摘要只输出 (x, y)</span>
+    </div>
+    <p><b>发现：</b>把 357 个周期的球坐标按字段统计：球 <span style="font-family:monospace">position.y</span> 全部落在 <b>0.133~0.928</b>（均值 0.164，99% 在 ±0.5 内）——这是<b>贴地高度</b>；而 <span style="font-family:monospace">position.z</span> 范围 <b>-3.641~3.589</b>，与球员横向坐标（±3.6）完全同量级——<b>z 才是横向</b>。球员是 2D (x, y 横向)，球是 3D (x, 高度 y, 横向 z)。</p>
+    <div class="chart">
+      <div class="ch-h">球的 y（高度）vs z（横向）分布</div>
+      <div class="ch-s">357 周期 · y 恒在 0.1~0.9（贴地高度），z 覆盖 ±3.6（横向）</div>
+      <div id="ch-axis" class="chartbox"></div>
+    </div>
+    <p><b>影响：</b>线上摘要的 Ball 行只输出 <span style="font-family:monospace">(x, y)</span>，于是模型看到的球位置永远是 <span style="font-family:monospace">(x, 0.1)</span>——<b>横向坐标从摘要中彻底消失</b>。日志里所有 "Ball: (-0.6, 0.1)" 的 0.1 都是高度，不是边路位置。同时 <span style="font-family:monospace">dist()</span> 用 y 计算球距，等于把高度当横向混入所有距离计算。</p>
+    <div class="log">"ball":{"position":{<span class="hl">"x":-0.60,"y":0.143,"z":-0.44</span>},"velocity":{"x":-0.97,<span class="hl">"y":0</span>,"z":-0.24},...}
+<span class="cm"># y=0.143 是高度（速度 y 恒为 0），横向位置在 z=-0.44</span>
+<span class="cm"># 但摘要只给模型：</span>
+Ball: (-0.6, <span class="hlr">0.1</span>) held by MY player 2</div>
+    <div class="logcap">logs/fwd2.csv · 球 y=0.14（高度）被当成横向输出给模型</div>
+  </div>
+
+  <!-- ============ LAYER 3 ============ -->
+  <div class="layhead l3">
+    <div class="lay-no">LAYER 3</div>
+    <div class="lay-cn">模型推理层 · Reasoning Failures</div>
+    <div class="lay-desc">两组问题发生在这里：输出结构（是否给出可执行、可解释的结构化决策）与决策行为（对最新状态是否真的响应，还是只在复读）。世界和摘要全对，模型也可能在这里出错。</div>
+    <div class="lay-badges"><span>BUG 6</span><span>决策行为审计</span></div>
+  </div>
+
+  <!-- ============ BUG 6 ============ -->
+  <div class="bug c1">
+    <div class="bug-head">
+      <span class="bug-id">BUG 6</span>
+      <span class="bug-title">LLM 输出缺 commandType：45% 指令是裸参数</span>
+      <span class="tier mixed">混合 · 模型输出质量 + 解析兜底</span>
+      <span class="bug-where">Layer 3 · 发现于 <b>埋点 3 · LLM 原始指令</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">179/395 缺 commandType</span>
+      <span class="f r">JSON 结构不规范</span>
+      <span class="f r">解析层兜底掩盖模型行为</span>
+    </div>
+    <p><b>发现：</b>统计 LLM 原始返回的 395 条指令，<b>179 条（45%）没有 commandType 字段</b>——模型直接输出 <span style="font-family:monospace">{"target_x":25.0,"target_y":10.0}</span> 这样的裸参数，靠解析层按"唯一可识别的字段"猜类型补全。</p>
+    <div class="chart">
+      <div class="ch-h">LLM 原始指令：commandType 完整度</div>
+      <div class="ch-s">395 条原始指令 · 216 带类型 / 179 缺类型</div>
+      <div id="ch-llm" class="chartbox"></div>
+    </div>
+    <div class="log">=====【LLM AI 返回原始指令】=====
+[ <span class="cm">| { | "target_x": 25.0, | "target_y": 10.0, | "sprint": true | } | ]</span>
+<span class="cm"># 无 commandType、无 playerId，字段与任何指令类型都不完全吻合</span></div>
+    <div class="logcap">logs/def.csv · LLM 原始返回 · 解析层按唯一字段推断为 MOVE_TO</div>
+    <p><b>影响：</b>解析层"尽力兜底"让整条链路表面零失败（395/395 成功下发），但这把模型的行为偏差藏进了日志——只有当埋点 3 和埋点 4 对比时才发现：<b>模型根本没有在输出结构化决策</b>。同时缺 playerId 也由解析层强制注入（每 agent 固定控制自己的位置号），进一步掩盖了模型对"控制谁"的无感知。</p>
+    <p class="mut" style="font-size:13px"><b style="color:#d4a843">归因（LLMOps 视角）：</b>45% 裸参数通常不是模型"能力不足"，而是 Prompt 的结构化约束不够强——未强制 JSON Schema / 未启用 Function Calling 或 Structured Outputs 等约束解码手段时，模型倾向于自由输出字段。责任在<b>调用侧约束设计</b>，而不在模型本身。</p>
+  </div>
+
+  <!-- ============ L3 EXT · decision-behavior audit ============ -->
+  <div class="bug c5">
+    <div class="bug-head">
+      <span class="bug-id">决策行为</span>
+      <span class="bug-title">指令 × 状态相关性审计：复读、无球动作、错位指令</span>
+      <span class="tier mixed">混合 · 上游污染 + 模型自身</span>
+      <span class="bug-where">Layer 3 · 埋点 3 × 埋点 1 交叉验证</span>
+    </div>
+    <p class="lead" style="font-size:14px">把每一条下发指令与它发出那一刻的<b>真实持球状态</b>（按同编号最近距离判定）交叉，得到一组独立的决策质量问题。它们部分继承自上层的污染，部分属于模型自身行为——<b>这条区分决定了修复后哪些会消失、哪些不会</b>。</p>
+    <div class="impact">
+      <div class="imp"><div class="n">43%</div><div class="t">状态变化但指令未变（117/270 周期）</div></div>
+      <div class="imp"><div class="n">110</div><div class="t">其中发生在 duration 窗口外，无法用"执行中维持"解释</div></div>
+      <div class="imp"><div class="n">69</div><div class="t">持球方易主（本队↔对方）但指令原样不变</div></div>
+      <div class="imp"><div class="n">10/26</div><div class="t">SHOOT 时非持球；6 次球在对方脚下仍射门</div></div>
+      <div class="imp"><div class="n">10/21</div><div class="t">PASS 在对方持球时发出；8/21 向后传</div></div>
+      <div class="imp"><div class="n">12/13</div><div class="t">GK_DISTRIBUTE 时门将距球 &gt;2，5 次球在对方脚下</div></div>
+    </div>
+    <div class="chart">
+      <div class="ch-h">指令类型 × 真实持球方（按同编号最近距离判定）</div>
+      <div class="ch-s">绿=本队持球 · 红=对方持球 · 灰=free · 彩色组合为明显不合理（本队持球时逼抢、对方持球时进攻）</div>
+      <div id="ch-matrix" class="chartbox"></div>
+    </div>
+    <div class="log"><span class="cm"># 球权在对方脚下，摘要却标 MY（BUG 4），模型据此发逼抢/射门：</span>
+=====【summarize_state 输出 精简摘要文本】===== ... Ball: (-2.1, 0.1) held by <span class="hlr">MY player 2</span> | ...
+=====【解析后最终下发指令】===== [{"commandType":"<span class="hl">PRESS_BALL</span>","playerId":2,...,"duration":5,"teamId":0}]
+<span class="cm"># FWD2 全场 74 周期中 47 次下发完全相同的出界 MOVE_TO(25,10)（duration=0，无执行窗口）</span></div>
+    <div class="logcap">logs/fwd2.csv · 复读指令串与错位指令（同一 agent 相邻周期完全相同指令 × 真实持球方）</div>
+    <p><b>归因拆分（关键）：</b>这组问题不是同一性质。无球射门（C）、无球门球分发（E）、出界移动目标（F）主要继承自上层——摘要距离失真、持球误标、场地尺度错，修掉 L1/L2 后基本消失；指令×持球错位（B）与无球传球（D）是混合，上游修对后部分消失。<b>但复读/锁死（A）是模型自身的独立行为</b>——43% 的状态变化无响应、69 次球权易主仍发同一条指令，即使用户把世界和摘要全部修对，只要决策层不约束"对最新状态响应"，agent 依然会"播幻灯片"。这也解释了为什么<a href="#chain" style="color:#3ea4b0">修复必须分层推进</a>。</p>
+  </div>
+
+  <!-- ============ LAYER 4 ============ -->
+  <div class="layhead l4">
+    <div class="lay-no">LAYER 4</div>
+    <div class="lay-cn">执行转换层 · Execution Failures</div>
+    <div class="lay-desc">模型想做的没错，但落地走了样——1 个缺陷发生在这里：目标消歧、参数校验、坐标系夹取。</div>
+    <div class="lay-badges"><span>BUG 7</span></div>
+  </div>
+
+  <!-- ============ BUG 7 ============ -->
+  <div class="bug c2">
+    <div class="bug-head">
+      <span class="bug-id">BUG 7</span>
+      <span class="bug-title">target_player_id 串线：指令目标无队伍上下文</span>
+      <span class="tier mixed">混合 · 上游契约 + 解析未消歧</span>
+      <span class="bug-where">Layer 4 · 发现于 <b>埋点 4 · 解析后指令</b></span>
+    </div>
+    <div class="flow">
+      <span class="f r">69 条指令带 target_player_id</span>
+      <span class="f r">MARK 目标 0/2/3/4 混用</span>
+      <span class="f r">teamId 只标发出方恒为 0</span>
+    </div>
+    <p><b>发现：</b>69 条指令携带 target_player_id（MARK 32 / PASS 21 / GK_DISTRIBUTE 13 / FOLLOW_PLAYER 3）。由于 BUG 1 的编号复用，<b>这个字段无法表达目标属于主队还是客队</b>；而解析后指令统一注入的 teamId 是<b>发出方</b>队伍（全程恒为 0），不携带目标归属。</p>
+    <div class="log">=====【解析后最终下发指令】=====
+[{"commandType":"MARK","playerId":1,"parameters":{<span class="hl">"target_player_id":3</span>,"tightness":"TIGHT"},"duration":5,"teamId":0},
+ {"commandType":"PASS","playerId":2,"parameters":{<span class="hl">"target_player_id":3</span>,"type":"GROUND"},"duration":0,"teamId":0},
+ {"commandType":"GK_DISTRIBUTE","playerId":0,"parameters":{<span class="hl">"target_player_id":1</span>,"method":"THROW"},"duration":0,"teamId":0}]</div>
+    <div class="logcap">logs/mid.csv · 同一 target_player_id=3，MARK 指客队 3 号而 PASS 指主队 3 号，字段本身无法区分</div>
+    <p><b>影响：</b>一个编号、两种语义（传球/分发指队友、盯防/跟随指对手），执行层如果不按指令类型区分目标归属，指令必然串线。追踪真实案例：DEF 发出 <span style="font-family:monospace">MARK target_player_id:0</span> 后，接下来 38 秒它从未朝任何 0 号球员移动——目标在执行层没有落地。</p>
+    <div class="impact">
+      <div class="imp"><div class="n">MARK 32</div><div class="t">target 0/2/3/4 混用（指对方）</div></div>
+      <div class="imp"><div class="n">PASS 21</div><div class="t">target 1/2/3/4 混用（指队友）</div></div>
+      <div class="imp"><div class="n">69</div><div class="t">全部缺少目标队伍字段</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head" id="chain"><span class="sec-no">05</span><h2>四层传导：错误如何逐级放大</h2></div>
+  <p class="lead">单独看，每个 bug 都"不大"；但它们不是孤立存在的。把上一章各层的缺陷串起来，会看到一条清晰的传导路径——上一层的输出是下一层的输入，错误沿着这条链逐级放大：</p>
+  <div class="chain">
+    <div class="lay l1">
+      <div class="lh">L1 · 世界状态层</div>
+      <div class="li">· agentId 两队复用（BUG 1）</div>
+      <div class="li">· 文档 ±55 vs 实际 ±6.4（BUG 2）</div>
+      <div class="fx">错误源头：世界状态本身带歧义</div>
+    </div>
+    <div class="car">→</div>
+    <div class="lay l2">
+      <div class="lh">L2 · 上下文层</div>
+      <div class="li">· 球门硬编码 ±55（BUG 3）</div>
+      <div class="li">· next() 无消歧 → 持球恒 MY（BUG 4）</div>
+      <div class="li">· 球 y=高度当横向（BUG 5）</div>
+      <div class="fx">模型看到的世界被系统性写错</div>
+    </div>
+    <div class="car">→</div>
+    <div class="lay l3">
+      <div class="lh">L3 · 模型推理层</div>
+      <div class="li">· 在 ±55 世界里规划 → 出界（BUG 2 延续）</div>
+      <div class="li">· 信"本队持球" → 攻防颠倒（BUG 4 延续）</div>
+      <div class="li">· 输出裸参数、缺类型（BUG 6）</div>
+      <div class="li">· 复读：状态变化 43% 无响应、球权易主仍同指令（决策行为，模型自身）</div>
+      <div class="fx">在错误前提下做错误决策 + 自身决策退化</div>
+    </div>
+    <div class="car">→</div>
+    <div class="lay l4">
+      <div class="lh">L4 · 执行转换层</div>
+      <div class="li">· target_player_id 无队伍维度（BUG 7）</div>
+      <div class="li">· 解析层兜底掩盖模型问题（BUG 6）</div>
+      <div class="fx">错误被"成功"地执行下去</div>
+    </div>
+  </div>
+  <div class="callout"><b>为什么修一个地方不够：</b>即使修掉 L2 的持球误标，L1 的编号复用仍让 target 无法消歧；即使修掉 L1，L2 的球门硬编码仍让 LLM 在 ±55 的世界里规划；即使全部修对摘要，L4 的解析层仍会把出界坐标原样下发。要扭转 0:2 的结果，需要的是<b>整条链的一致性修复</b>，而不是任何单一补丁。这也正是"分层定位"与"逐层修复"必须配套的原因。</div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">06</span><h2>从 Bug 到 Agent Observability</h2></div>
+  <p class="lead">这场比赛最终输了 0:2。<b>但比分并不是本文最重要的发现。</b>更重要的是，通过四个埋点，我们第一次能够回答：<b>Agent 的错误究竟发生在哪一层</b>。下面的归因清单把 7 个案例压缩成一张排查表，供任何 Agent 系统直接套用。</p>
+
+  <h3>七个案例，压缩成一张归因清单</h3>
+  <p>框架本身已在 01 章建立，这里只留案例与排查手段：</p>
+  <table>
+    <colgroup><col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%"></colgroup>
+    <tr><th>层次</th><th>本文案例</th><th>排查手段</th><th>对应埋点切面</th></tr>
+    <tr><td class="mono">L1 世界状态</td><td>BUG 1 · BUG 2</td><td>字段全量扫描：编号唯一性、坐标尺度、轴语义</td><td class="mono">埋点 1</td></tr>
+    <tr><td class="mono">L2 上下文</td><td>BUG 3 · BUG 4 · BUG 5</td><td>摘要声明 vs 原始数据交叉验证</td><td class="mono">埋点 2 × 1</td></tr>
+    <tr><td class="mono">L3 模型推理</td><td>BUG 6 · 决策行为审计</td><td>字段完整度、对状态变化的响应性；指令×真实持球交叉</td><td class="mono">埋点 3 / 3×1</td></tr>
+    <tr><td class="mono">L4 执行转换</td><td>BUG 7</td><td>模型输出与下发指令对比</td><td class="mono">埋点 3 × 4</td></tr>
+  </table>
+  <div class="callout"><b>可观测性正在变成新的基础设施：</b>对越来越复杂的 Multi-Agent 系统而言，<b>Prompt 已经不再是主要调试对象</b>——当五个 agent 共享世界、各自决策、互相影响时，调试对象是"状态在层与层之间如何失真"。分层的日志切面，就是把不可见的失真变成可见的路径。这一框架并不属于足球：换成 AI Customer Service、AI Coding Agent、AI Research Agent、AI Operations Agent，四层结构完全一样。</div>
+  <div class="callout warn"><b>修复必须分层，因为问题分层：</b>决策行为审计给出了一条硬结论——无球射门、无球门球分发、出界移动目标主要继承自上层的摘要失真（修 L1/L2 基本消失）；但<b>复读（43% 状态变化无响应、69 次球权易主仍同指令）是 L3 模型自身的独立问题</b>，上游全修对也不会消失。只修系统不修决策，agent 依然会"播幻灯片"——每一层的问题，要在每一层修。</div>
+
+  <h3>同一套框架，你已经在用的三块拼图</h3>
+  <p>如果把视角再拉高一点，这次排查并不是孤立的一次性案例，它与此前解决的问题其实属于同一个更大的体系——<b>Multi-Agent LLM System Engineering</b>。注意下面的分组不再是故障分层，而是四条能力线：</p>
+  <div class="pipe">
+    <div class="step"><div class="tag">World State Modeling</div><div class="nm">共享世界状态建模</div><div class="ds">possession 归属错误 → 世界层失真，多个 agent 基于同一份错误状态各自行动</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="tag">Context Engineering</div><div class="nm">上下文工程</div><div class="ds">teamChat 丢失 → 摘要层信息缺失，模型在残缺上下文中决策</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="tag">Reasoning Architecture</div><div class="nm">推理架构</div><div class="ds">Rule-LLM Hybrid → 把不确定性交给模型、确定性交给规则</div></div>
+    <div class="arr">→</div>
+    <div class="step pin"><div class="tag">Observability</div><div class="nm">分层可观测性</div><div class="ds">四个埋点 → 把前三个维度的问题变成可定位、可回查、可量化</div></div>
+  </div>
+  <p>世界状态建模、上下文工程、推理架构、可观测性——四块拼图各解决一层，而可观测性是让前三者"可被调试"的前提。没有分层埋点，Context Engineering 的缺陷只能表现为"模型答得不对"，World State 的错误只能表现为"比赛输了"，Reasoning 的问题只能表现为"这 AI 不聪明"——全是无法归因的症状。</p>
+  <div class="callout warn"><b>未完待续：</b>本文只做了"发现、分层与归因"。7 个缺陷各自的修复方案（坐标动态读取、持球距离消歧、target 带队伍、clamp 真实边界等）与验证方式，留待修复篇。</div>
+</section>
+
+<footer>
+  <div>数据与方法附录</div>
+  <div class="src">· 数据来源：5 个 agent 的 CSV 日志（gk/def/mid/fwd1/fwd2），共 362 个决策周期；5 个 tick-0 周期因球缺 position 字段跳过，球坐标统计口径 357 周期。
+· 持球归属判定口径：对摘要标 "MY player N" 的周期，取同编号两名球员中距球最近者判定真实持球方；90/237 周期真实持球方为客队（100% 错标）。<b>边界模糊说明：</b>237 个判定周期中，两候选与球距离差 &lt;1.0 的有 40 个（16.9%），其中 30 个落在"误标"样本内——即门前混战/贴身对抗瞬间，几何判定存在约 1/3 的边界不确定性，但 60 个误标样本距离差 ≥1.0，趋势结论（摘要系统性误标）不受影响。
+· 出界判定口径：目标超出实测场地 ±6.5/±3.8 即记出界；111/235 条 MOVE_TO 出界。
+· 延迟口径：t(LLM 返回) − t(摘要完成)，362 周期 P50=797ms，端到端 P50=798ms（本地处理 &lt;1ms）。
+· 生成工具：解析脚本 parse_and_analyze.py（可复现全部数字）+ 静态 HTML 报告。</div>
+</footer>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+(function(){
+  'use strict';
+  var DATA = {
+    cmdTotals: [
+      {name:'MOVE_TO', value:235}, {name:'PRESS_BALL', value:47}, {name:'MARK', value:32},
+      {name:'SHOOT', value:26}, {name:'PASS', value:21}, {name:'INTERCEPT', value:17},
+      {name:'GK_DISTRIBUTE', value:13}, {name:'FOLLOW_PLAYER', value:3}, {name:'SET_STANCE', value:1}
+    ],
+    latency: [
+      {name:'MID', v:1007}, {name:'DEF', v:887}, {name:'FWD2', v:815},
+      {name:'FWD1', v:610}, {name:'GK', v:609}
+    ],
+    possession: {my:147, away:90},
+    llm: {typed:216, bare:179},
+    fieldDoc: [[-55,55],[-35,35]],
+    fieldHome: [[-6.40,6.40],[-3.13,3.60]],
+    fieldAway: [[-3.64,6.40],[-2.72,3.60]],
+    ballY: {min:0.133, max:0.928, mean:0.164},
+    ballZ: {min:-3.641, max:3.589}
+  };
+  function init(id, opt){
+    var el = document.getElementById(id);
+    if(!el || typeof echarts === 'undefined'){ return; }
+    var c = echarts.init(el);
+    c.setOption(opt);
+    window.addEventListener('resize', function(){ c.resize(); });
+  }
+  function baseTooltip(){ return {trigger:'item', triggerOn:'click', renderMode:'richText', confine:true}; }
+  function baseAxis(){
+    return {
+      grid:{left:50, right:20, top:34, bottom:44, containLabel:true},
+      xAxis:{type:'category', axisLabel:{color:'#8b9bb4', fontSize:11}, axisLine:{lineStyle:{color:'#22314e'}}},
+      yAxis:{type:'value', axisLabel:{color:'#8b9bb4', fontSize:11}, splitLine:{lineStyle:{color:'rgba(255,255,255,.05)'}}}
+    };
+  }
+  // 1. 指令构成
+  init('ch-cmds', Object.assign({}, baseAxis(), {
+    tooltip: Object.assign({}, baseTooltip(), {formatter: function(p){
+      return p.name + '：' + p.value + ' 条（' + (p.value/395*100).toFixed(1) + '%）';
+    }}),
+    series: [{
+      type:'bar', data: DATA.cmdTotals.map(function(d){ return {name:d.name, value:d.value}; }),
+      itemStyle:{color:function(p){ var m={MOVE_TO:'#3ea4b0',PRESS_BALL:'#3eb05c',MARK:'#d4a843',SHOOT:'#ff7b72',PASS:'#a371f7'}; return m[p.name]||'#5d6d88'; }, borderRadius:[4,4,0,0]},
+      label:{show:true, position:'top', color:'#c6d2e2', fontSize:11}
+    }]
+  }));
+  // 2. 延迟
+  init('ch-lat', Object.assign({}, baseAxis(), {
+    tooltip: Object.assign({}, baseTooltip(), {formatter: function(p){ return p.name + '：P50 ' + p.value + ' ms'; }}),
+    series: [{
+      type:'bar', data: DATA.latency.map(function(d){ return {name:d.name, value:d.v}; }),
+      itemStyle:{color:'#a371f7', borderRadius:[4,4,0,0]},
+      label:{show:true, position:'top', color:'#c6d2e2', fontSize:11, formatter:'{c}ms'}
+    }]
+  }));
+  // 3. 场地
+  init('ch-field', {
+    tooltip: {trigger:'item', triggerOn:'click', renderMode:'richText', confine:true},
+    grid:{left:40, right:16, top:40, bottom:40, containLabel:true},
+    xAxis:{type:'value', min:-60, max:60, name:'x', nameTextStyle:{color:'#5d6d88'}, axisLabel:{color:'#8b9bb4', fontSize:10}, splitLine:{lineStyle:{color:'rgba(255,255,255,.04)'}}},
+    yAxis:{type:'value', min:-40, max:40, name:'y', nameTextStyle:{color:'#5d6d88'}, axisLabel:{color:'#8b9bb4', fontSize:10}, splitLine:{lineStyle:{color:'rgba(255,255,255,.04)'}}},
+    series: [
+      {type:'scatter', name:'文档边界 ±55×±35', symbolSize:11, symbol:'rect',
+       data:[[-55,-35],[55,-35],[55,35],[-55,35]],
+       itemStyle:{color:'rgba(141,155,180,.35)', borderColor:'#8b9bb4', borderWidth:1}},
+      {type:'scatter', name:'本队活动范围', symbolSize:5, data:[[-6.4,-3.13],[-6.4,3.6],[6.4,3.6],[6.4,-3.13]], itemStyle:{color:'rgba(62,176,92,.8)'}, silent:true},
+      {type:'scatter', name:'客队活动范围', symbolSize:5, data:[[-3.64,-2.72],[6.4,3.6]], itemStyle:{color:'rgba(62,164,176,.8)'}, silent:true}
+    ],
+    legend:{show:true, textStyle:{color:'#8b9bb4', fontSize:11}, top:6}
+  });
+  // 4. 持球交叉
+  init('ch-possession', Object.assign({}, baseAxis(), {
+    tooltip: Object.assign({}, baseTooltip(), {formatter: function(p){ return p.name + '：' + p.value + ' 周期'; }}),
+    series: [{
+      type:'bar', data: [
+        {name:'真实持球 = 本队', value: DATA.possession.my, itemStyle:{color:'#3eb05c'}},
+        {name:'真实持球 = 客队（误标）', value: DATA.possession.away, itemStyle:{color:'#ff7b72'}}
+      ],
+      label:{show:true, position:'top', color:'#c6d2e2', fontSize:12},
+      barWidth: 72
+    }]
+  }));
+  // 5. 球轴
+  init('ch-axis', {
+    tooltip: {trigger:'axis', triggerOn:'click', renderMode:'richText', confine:true},
+    grid:{left:44, right:20, top:36, bottom:44, containLabel:true},
+    xAxis:{type:'category', data:['y（摘要输出）','z（真实横向）'], axisLabel:{color:'#8b9bb4', fontSize:11}, axisLine:{lineStyle:{color:'#22314e'}}},
+    yAxis:{type:'value', name:'坐标值', nameTextStyle:{color:'#5d6d88'}, axisLabel:{color:'#8b9bb4', fontSize:11}, splitLine:{lineStyle:{color:'rgba(255,255,255,.05)'}}},
+    series: [{
+      type:'bar', barWidth:64,
+      data: [
+        {value:0.164, itemStyle:{color:'#ff8d5c'}},
+        {value:0, itemStyle:{color:'#3ea4b0'}}
+      ],
+      label:{show:true, position:'top', color:'#c6d2e2', fontSize:12, formatter:function(p){ return p.dataIndex===0 ? '均值 0.164' : '范围 ±3.6'; }}
+    }],
+    graphic: [
+      {type:'text', left:'center', top:'6%', style:{text:'y 恒为贴地高度（0.13~0.93）· z 才是横向（-3.6~3.6）', fill:'#8b9bb4', fontSize:12}}
+    ]
+  });
+  // 6. LLM 完整度
+  init('ch-llm', {
+    tooltip: {trigger:'item', triggerOn:'click', renderMode:'richText', confine:true},
+    series: [{
+      type:'pie', radius:['42%','68%'], center:['50%','52%'],
+      label:{color:'#c6d2e2', fontSize:12, formatter:'{b}\n{d}%'},
+      data: [
+        {name:'带 commandType', value:216, itemStyle:{color:'#3eb05c'}},
+        {name:'缺 commandType（裸参数）', value:179, itemStyle:{color:'#ff7b72'}}
+      ]
+    }]
+  });
+  // 7. 指令类型 × 真实持球方（L3 决策行为审计）
+  init('ch-matrix', Object.assign({}, baseAxis(), {
+    tooltip: Object.assign({}, baseTooltip(), {formatter:function(p){ return p.seriesName + ' · ' + p.name + '：' + p.value + ' 条'; }}),
+    legend:{show:true, textStyle:{color:'#8b9bb4', fontSize:11}, top:2},
+    series: [
+      {name:'本队持球', type:'bar', stack:'t', data:[83,23,19,20,11,0,8], itemStyle:{color:'#3eb05c'}},
+      {name:'对方持球', type:'bar', stack:'t', data:[53,14,13,6,10,1,5], itemStyle:{color:'#ff7b72'}},
+      {name:'free', type:'bar', stack:'t', data:[99,10,0,0,0,16,0], itemStyle:{color:'#5d6d88'}}
+    ],
+    xAxis:{type:'category', data:['MOVE_TO','PRESS_BALL','MARK','SHOOT','PASS','INTERCEPT','GK_DISTRIBUTE'], axisLabel:{color:'#8b9bb4', fontSize:11}, axisLine:{lineStyle:{color:'#22314e'}}}
+  }));
+})();
+</script>
+</body>
+</html>
