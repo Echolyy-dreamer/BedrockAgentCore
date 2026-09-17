@@ -160,7 +160,7 @@
 <header class="hero">
   <div class="kicker">AWS Agentic Football Cup · 一次 Multi-Agent LLM 系统的可观测性实践</div>
   <h1 class="title">一次 Multi-Agent LLM 系统的<span class="hl">可观测性实践</span><br><span class="hl2">从一场 0:2 的球赛谈起</span></h1>
-  <p class="sub">当一个 Agent 系统行为异常时，最终表现往往只是：输掉比赛、回答错误、执行失败。但真正的问题可能发生在完全不同的层次——世界状态构造、上下文压缩、模型推理、执行转换。本文用一场 0:2 的 Agentic 足球赛说明：<b>四个埋点如何把 Multi-Agent LLM 系统的决策链路切成四段，第一次让"错误发生在哪一层"可以被日志回答</b>。7 个缺陷只是案例，框架才是本文要讲的。</p>
+  <p class="sub">当一个 Agent 系统行为异常时，最终表现往往只是：输掉比赛、回答错误、执行失败。但真正的问题可能发生在完全不同的层次——世界状态构造、上下文压缩、模型推理、执行转换。本文用一场 0:2 的 Agentic 足球赛说明：<b>四个埋点如何把 Multi-Agent LLM 系统的决策链路切成四段，让"错误发生在哪一层"可以被日志清晰回答</b>。7 个缺陷只是案例，框架才是本文要讲的。</p>
   <div class="meta">
     <span>埋点 <b>4</b> 个</span>
     <span>决策周期 <b>362</b></span>
@@ -189,8 +189,8 @@
     <div class="arr">→</div>
     <div class="step"><div class="tag">L4 · 执行</div><div class="nm">Execution</div><div class="ds">把模型输出转换成最终动作的最后一环：解析、校验、落地</div></div>
   </div>
-  <div class="callout"><b>没有分层埋点时：</b>你只能看到错误结果（0:2 的比分），然后对着结果猜测——是模型不行？是 Prompt 不对？还是引擎有 bug？<b>有了分层埋点后：</b>每一层的输入与输出都被记录，错误在哪一层产生、从哪一层开始失真，第一次可以被日志回答，而不是靠猜。</div>
-  <p>下面这场足球赛是这套方法最完整的样本：5 个位置智能体（GK / DEF / MID / FWD1 / FWD2）各自独立决策，共享同一个游戏世界，最终以 0:2 落败。整场比赛留下了 <b>362 个完整决策周期</b>，四个埋点横跨全部周期——没有比这更适合讲分层可观测性的场景了。</p>
+  <div class="callout"><b>没有分层埋点时：</b>你只能看到错误结果（0:2 的比分），然后对着结果猜测——是模型不行？是 Prompt 不对？还是引擎有 bug？<b>有了分层埋点后：</b>每一层的输入与输出都被记录，错误在哪一层产生、从哪一层开始失真，日志可以回答，而不是靠猜。</div>
+  <p>下面这场足球赛是这套方法最完整的样本：5 个位置智能体（GK / DEF / MID / FWD1 / FWD2）各自独立决策，共享同一个游戏世界，最终以 0:2 落败。整场比赛留下了 <b>362 个完整决策周期</b>，四个埋点横跨全部周期——样本足够完整。</p>
 </section>
 
 <section>
@@ -249,7 +249,7 @@
   <div class="layhead l1">
     <div class="lay-no">LAYER 1</div>
     <div class="lay-cn">世界状态层 · World Model / Contract Failures</div>
-    <div class="lay-desc">7 个缺陷中有 2 个的根在这里：字段语义、坐标尺度、编号唯一性。错在这一层，Agent 代码读得再对也救不回来。</div>
+    <div class="lay-desc">7 个缺陷中有 2 个的根在这里：字段语义、坐标尺度、编号唯一性。错在这一层，下游无论怎么处理也救不回来。</div>
     <div class="lay-badges"><span>BUG 1</span><span>BUG 2</span></div>
   </div>
 
@@ -331,7 +331,7 @@
       <span class="f r">distOppGoal 放大 ~5 倍</span>
       <span class="f r">全场比赛一以贯之</span>
     </div>
-    <p><b>发现：</b>对 362 个周期的摘要做全文扫描，"Your goal at x=<b>-55</b> | Opponent goal at x=<b>55</b>"出现 362 次——<b>没有任何一个周期例外</b>。对照代码，线上版 <span style="font-family:monospace">get_goal_positions()</span> 对 team 0 直接 <span style="font-family:monospace">return -55.0, 55.0</span>，球门坐标是硬编码的文档值，不是从 game_state 读的真实球门。</p>
+    <p><b>发现：</b>对 362 个周期的摘要做全文扫描，"Your goal at x=<b>-55</b> | Opponent goal at x=<b>55</b>"出现 362 次——<b>没有任何一个周期例外</b>。对照代码，<span style="font-family:monospace">get_goal_positions()</span> 对 team 0 直接 <span style="font-family:monospace">return -55.0, 55.0</span>，球门坐标是硬编码的文档值，不是从 game_state 读的真实球门。</p>
     <div class="log">Time: 3s | Score: 0-0 | Team: 0 (HOME) | PlayMode: OPEN_PLAY |
 Ball: (-0.6, 0.1) held by MY player 2 |
 <span class="hl">Your goal at x=-55 | Opponent goal at x=55</span> |
