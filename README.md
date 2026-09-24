@@ -1,6 +1,9 @@
 # Analysis: Failure-First Audit of Multi-Agent AIOps  
 ## From Workshop Demo to Production-Grade Reasoning  
 *(AWS Bedrock AgentCore Case Study)*
+![AIopsArchitecture](https://raw.githubusercontent.com/Echolyy-dreamer/BedrockAgentCore/main/images/AIops.png)
+
+The workshop is regarding: When an alarm is received, the Brain Agent analyzes the alert and generates an investigation workflow. The Executor Agent then executes the investigation tasks in order, invoking specialist agents — LogsAgent, TraceGraphAgent, and ChangeDetectionAgent — to query CloudWatch Logs, X-Ray traces, and CloudTrail change records through the MCP Gateway. Finally, all evidence is synthesized to produce a Root Cause Analysis conclusion.
 
 ---
 
